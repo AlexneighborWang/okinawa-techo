@@ -25,6 +25,14 @@ service cloud.firestore {
     match /hotels/{hotelId} {
       allow read, write: if isAuthenticated();
     }
+
+    match /settings/{settingId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /vouchers/{voucherId} {
+      allow read, write: if isAuthenticated();
+    }
     
     match /users/{userId} {
       allow read, write: if request.auth.uid == userId;

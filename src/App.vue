@@ -364,6 +364,58 @@ const defaultHotels: HotelInfo[] = [
 
 const hotels = ref<HotelInfo[]>(JSON.parse(localStorage.getItem('okinawa_hotels') || JSON.stringify(defaultHotels)));
 
+const forceSyncAllToFirebase = async (silent = false) => {
+  if (!userId.value) {
+    if (!silent) showToast('請先登入才能同步資料', 'error');
+    return;
+  }
+  
+  if (!silent) showToast('正在同步所有資料到雲端...', 'info');
+  
+  try {
+    // 1. Hotels
+    for (const h of hotels.value) {
+      await syncToFirebase('hotels', h.id, h);
+    }
+    
+    // 2. Schedule
+    for (const day in allScheduleItems) {
+      for (const item of allScheduleItems[day]) {
+        // Ensure item has an ID and it doesn't contain slashes
+        if (!item.id || (typeof item.id === 'string' && item.id.includes('/'))) {
+          const safeDay = day.replace(/\//g, '-');
+          item.id = `legacy_${safeDay}_${Math.random().toString(36).substr(2, 9)}`;
+        }
+        await syncToFirebase('schedule', item.id, { ...item, day });
+      }
+    }
+    
+    // 3. Expenses
+    for (const e of expenses.value) {
+      await syncToFirebase('expenses', e.id, e);
+    }
+    
+    // 4. Planning
+    for (const tab in planningData.value) {
+      for (const item of planningData.value[tab]) {
+        const id = item.id ? item.id.toString() : `legacy_${tab}_${Math.random().toString(36).substr(2, 9)}`;
+        await syncToFirebase('planning', id, { ...item, tab });
+      }
+    }
+    
+    // 5. Vouchers (eSIMs)
+    await syncToFirebase('vouchers', 'esims', { images: esims.value });
+    
+    // 6. Settings
+    await syncToFirebase('settings', 'app', { mainTitle: mainTitle.value, subTitle: subTitle.value });
+    
+    if (!silent) showToast('所有資料已同步到雲端', 'success');
+  } catch (e) {
+    console.error('Force sync failed', e);
+    if (!silent) showToast('同步失敗', 'error');
+  }
+};
+
 // Data Migration & Sync Logic
 const migrateAndSync = () => {
   let needsSave = false;
@@ -646,18 +698,7 @@ const planningProgress = computed(() => {
   return stats;
 });
 
-// Restore missing default todo items if requested
-const restoreDefaults = () => {
-  const currentTodoTexts = new Set(planningData.value.todo.map((i: any) => i.text));
-  defaultPlanning.todo.forEach(item => {
-    if (!currentTodoTexts.has(item.text)) {
-      planningData.value.todo.push({ ...item, id: Date.now() + Math.random() });
-    }
-  });
-  savePlanning();
-  showToast('已恢復預設待辦項目', 'success');
-};
-
+// Save planning data to local storage
 const savePlanning = () => {
   localStorage.setItem('okinawa_planning', JSON.stringify(planningData.value));
 };
@@ -703,7 +744,8 @@ const saveEditPlanning = async (item: any) => {
     showToast('已更新項目', 'success');
     
     // Sync to Firebase
-    await syncToFirebase('planning', item.id.toString(), { ...item, tab: planningTab.value });
+    const id = item.id ? item.id.toString() : Date.now().toString();
+    await syncToFirebase('planning', id, { ...item, tab: planningTab.value });
   }
   editingPlanningId.value = null;
 };
@@ -722,7 +764,8 @@ const togglePlanningItem = async (item: any) => {
   savePlanning();
   
   // Sync to Firebase
-  await syncToFirebase('planning', item.id.toString(), { ...item, tab: planningTab.value });
+  const id = item.id ? item.id.toString() : Date.now().toString();
+  await syncToFirebase('planning', id, { ...item, tab: planningTab.value });
 };
 
 const confirmDeletePlanning = (id: any) => {
@@ -915,22 +958,28 @@ const totalJpy = computed(() => {
 
 const totalTwd = computed(() => Math.round(totalJpy.value * exchangeRates['JPY']));
 
-const handleEsimUpload = (event: Event, index: number) => {
+const handleEsimUpload = async (event: Event, index: number) => {
   const target = event.target as HTMLInputElement;
   if (target.files && target.files[0]) {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const result = e.target?.result as string;
       esims.value[index] = result;
       localStorage.setItem('okinawa_esims', JSON.stringify(esims.value));
+      
+      // Sync to Firebase
+      await syncToFirebase('vouchers', 'esims', { images: esims.value });
     };
     reader.readAsDataURL(target.files[0]);
   }
 };
 
-const removeEsim = (index: number) => {
+const removeEsim = async (index: number) => {
   esims.value[index] = "";
   localStorage.setItem('okinawa_esims', JSON.stringify(esims.value));
+  
+  // Sync to Firebase
+  await syncToFirebase('vouchers', 'esims', { images: esims.value });
 };
 
 const triggerEsimUpload = (index: number) => {
@@ -1118,13 +1167,17 @@ const confirmDelete = async () => {
   }
 };
 
-const moveItem = (index: number, direction: 'up' | 'down') => {
+const moveItem = async (index: number, direction: 'up' | 'down') => {
   const items = allScheduleItems[selectedDay.value];
   const newIndex = direction === 'up' ? index - 1 : index + 1;
   if (newIndex >= 0 && newIndex < items.length) {
     const temp = items[index];
     items[index] = items[newIndex];
     items[newIndex] = temp;
+    
+    // Sync both moved items to Firebase
+    await syncToFirebase('schedule', items[index].id, { ...items[index], day: selectedDay.value });
+    await syncToFirebase('schedule', items[newIndex].id, { ...items[newIndex], day: selectedDay.value });
   }
 };
 
@@ -1144,6 +1197,7 @@ const updateTypeLabel = () => {
 
 // App Titles
 const mainTitle = ref(localStorage.getItem('okinawa_main_title') || '2026沖繩五日遊');
+
 const subTitle = ref(localStorage.getItem('okinawa_sub_title') || '王姥姥進大琉球GO');
 
 // Mock Data
@@ -1203,6 +1257,13 @@ const userId = ref<string | null>(null);
 // Firebase Sync Logic
 const syncToFirebase = async (collectionName: string, id: string, data: any) => {
   if (!userId.value) return;
+  if (!id || typeof id !== 'string' || id.includes('/')) {
+    console.warn(`Invalid ID for sync to ${collectionName}:`, id);
+    if (id && id.includes('/')) {
+      showToast(`資料 ID 包含非法字元 (/)，已跳過同步: ${id}`, 'error');
+    }
+    return;
+  }
   try {
     // Check data size (rough estimate)
     const dataStr = JSON.stringify(data);
@@ -1224,6 +1285,10 @@ const syncToFirebase = async (collectionName: string, id: string, data: any) => 
 
 const deleteFromFirebase = async (collectionName: string, id: string) => {
   if (!userId.value) return;
+  if (!id || typeof id !== 'string' || id.includes('/')) {
+    console.warn(`Invalid ID for delete from ${collectionName}:`, id);
+    return;
+  }
   try {
     await deleteDoc(doc(db, collectionName, id));
   } catch (error) {
@@ -1239,6 +1304,8 @@ onMounted(async () => {
       isAuthReady.value = true;
       migrateAndSync();
       setupRealtimeListeners();
+      // Auto sync all local data to cloud on login (silent)
+      forceSyncAllToFirebase(true);
     } else {
       isAuthReady.value = false;
     }
@@ -1274,6 +1341,25 @@ const setupRealtimeListeners = () => {
   isSyncing.expenses = true;
   isSyncing.planning = true;
   isSyncing.hotels = true;
+  
+  // 0. App Settings Sync
+  const settingsUnsub = onSnapshot(doc(db, 'settings', 'app'), (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      if (data.mainTitle) mainTitle.value = data.mainTitle;
+      if (data.subTitle) subTitle.value = data.subTitle;
+    }
+  });
+  unsubscribes.push(settingsUnsub);
+
+  // 0.1 Vouchers (eSIMs) Sync
+  const vouchersUnsub = onSnapshot(doc(db, 'vouchers', 'esims'), (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      if (data.images) esims.value = data.images;
+    }
+  });
+  unsubscribes.push(vouchersUnsub);
 
   // 1. Schedule Sync
   const scheduleUnsub = onSnapshot(collection(db, 'schedule'), (snapshot) => {
@@ -1281,6 +1367,8 @@ const setupRealtimeListeners = () => {
     snapshot.docChanges().forEach((change) => {
       const data = change.doc.data();
       const day = data.day;
+      if (!day) return; // Safety check
+      
       if (!allScheduleItems[day]) allScheduleItems[day] = [];
       
       if (change.type === 'added' || change.type === 'modified') {
@@ -1325,6 +1413,8 @@ const setupRealtimeListeners = () => {
     snapshot.docChanges().forEach((change) => {
       const data = change.doc.data();
       const tab = data.tab;
+      if (!tab || !planningData.value[tab]) return; // Safety check
+      
       if (change.type === 'added' || change.type === 'modified') {
         const index = planningData.value[tab].findIndex((i: any) => i.id === change.doc.id);
         const newItem = { ...data, id: change.doc.id };
@@ -1379,10 +1469,12 @@ watch(allScheduleItems, (newVal) => {
 
 watch(mainTitle, (newVal) => {
   localStorage.setItem('okinawa_main_title', newVal);
+  syncToFirebase('settings', 'app', { mainTitle: newVal, subTitle: subTitle.value });
 });
 
 watch(subTitle, (newVal) => {
   localStorage.setItem('okinawa_sub_title', newVal);
+  syncToFirebase('settings', 'app', { mainTitle: mainTitle.value, subTitle: newVal });
 });
 
 watch(hotels, (newVal) => {
@@ -1473,56 +1565,52 @@ const countdown = computed(() => {
     </div>
 
     <!-- Header -->
-    <header class="p-6 pt-12">
-      <div class="flex justify-between items-end">
-        <div class="flex-grow">
-            <div v-if="isEditMode" class="space-y-2 pr-4">
-              <div class="flex items-center gap-2">
-                <input 
-                  v-model="mainTitle" 
-                  class="text-2xl font-bold text-okinawa-blue-dark bg-techo-ink/5 rounded-lg px-2 py-1 w-full focus:outline-none focus:ring-2 focus:ring-okinawa-blue"
-                >
-                <button 
-                  @click="resetDeclaration"
-                  class="p-2 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors flex-shrink-0"
-                  title="重置行前宣示"
-                >
-                  <RotateCcw class="w-4 h-4" />
-                </button>
-              </div>
-              <div class="flex items-center gap-2">
-              <Plane class="w-4 h-4 text-techo-ink/40" />
-              <input 
-                v-model="subTitle" 
-                class="text-sm font-medium text-techo-ink/60 bg-techo-ink/5 rounded-lg px-2 py-1 w-full focus:outline-none focus:ring-2 focus:ring-okinawa-blue"
-              >
-            </div>
+    <header class="p-6 pt-10">
+      <!-- Sync Status -->
+      <div v-if="isSyncing.hotels" class="flex items-center gap-1.5 text-[10px] font-bold text-okinawa-blue animate-pulse mb-6">
+        <RefreshCw class="w-3.5 h-3.5 animate-spin" />
+        <span>雲端同步中...</span>
+      </div>
+
+      <!-- Title Area -->
+      <div class="space-y-4">
+        <div v-if="isEditMode" class="space-y-4">
+          <div class="relative">
+            <input 
+              v-model="mainTitle" 
+              class="text-2xl font-bold text-okinawa-blue-dark bg-techo-ink/5 rounded-2xl px-4 py-3 w-full focus:outline-none focus:ring-2 focus:ring-okinawa-blue shadow-inner"
+              placeholder="主標題"
+            >
           </div>
-          <div v-else>
-            <h1 class="text-3xl font-bold text-okinawa-blue-dark flex items-center gap-2">
-              {{ mainTitle }}
-            </h1>
-            <div class="flex flex-col">
-              <p class="text-techo-ink/60 mt-1 flex items-center gap-2">
-                <Plane class="w-4 h-4" /> {{ subTitle }}
-              </p>
-              <button 
-                @click="showDeclarationModal = true"
-                class="text-[10px] font-bold text-okinawa-blue/60 hover:text-okinawa-blue flex items-center gap-1 mt-1 w-fit"
-              >
-                <CheckCircle2 class="w-3 h-3" />
-                <span>行前宣示</span>
-              </button>
+          <div class="flex items-center gap-3 bg-techo-ink/5 rounded-2xl px-4 py-3">
+            <Plane class="w-5 h-5 text-techo-ink/40 flex-shrink-0" />
+            <input 
+              v-model="subTitle" 
+              class="text-lg font-medium text-techo-ink/60 bg-transparent w-full focus:outline-none"
+              placeholder="副標題"
+            >
+          </div>
+        </div>
+        <div v-else>
+          <h1 class="text-3xl font-bold text-okinawa-blue-dark leading-tight">{{ mainTitle }}</h1>
+          <p class="text-lg font-medium text-techo-ink/40 flex items-center gap-2 mt-2">
+            <Plane class="w-5 h-5" /> {{ subTitle }}
+          </p>
+          
+          <div class="flex items-center gap-3 mt-6">
+            <button 
+              @click="showDeclarationModal = true"
+              class="text-xs font-bold text-okinawa-blue bg-okinawa-blue/5 px-4 py-2.5 rounded-xl hover:bg-okinawa-blue/10 flex items-center gap-2 transition-all border border-okinawa-blue/10 shadow-sm active:scale-95"
+            >
+              <CheckCircle2 class="w-4 h-4" />
+              <span>行前宣示</span>
+            </button>
+            <div v-if="countdown > 0" class="flex items-center gap-2 text-xs font-bold text-orange-500 bg-orange-50 px-4 py-2.5 rounded-xl border border-orange-100 shadow-sm">
+              <Clock class="w-4 h-4" />
+              <span>出發倒數 {{ countdown }} 天</span>
             </div>
           </div>
         </div>
-        <button 
-          v-if="currentView === 'schedule'"
-          @click="toggleEditMode"
-          :class="['p-2 rounded-full transition-all flex-shrink-0', isEditMode ? 'bg-okinawa-blue text-white shadow-lg' : 'bg-techo-ink/5 text-techo-ink/40']"
-        >
-          <Edit2 class="w-5 h-5" />
-        </button>
       </div>
     </header>
 
@@ -1543,7 +1631,7 @@ const countdown = computed(() => {
               ]"
             >
               <span class="text-xl font-bold leading-none">{{ day.dayNum }}</span>
-              <span class="text-[11px] font-medium opacity-80 mt-0.5 leading-none">{{ day.date }}({{ day.day }})</span>
+              <span class="text-[13px] font-medium opacity-80 mt-1 leading-none">{{ day.date }}({{ day.day }})</span>
             </button>
           </div>
         </div>
@@ -1822,13 +1910,6 @@ const countdown = computed(() => {
               <span>住宿預訂</span>
             </div>
             <div class="flex items-center gap-2">
-              <button 
-                @click="migrateAndSync(); setupRealtimeListeners();" 
-                class="p-1.5 hover:bg-techo-ink/5 rounded-full transition-colors text-techo-ink/40"
-                title="重新整理資料"
-              >
-                <RotateCcw class="w-3.5 h-3.5" />
-              </button>
               <div v-if="isSyncing.hotels" class="flex items-center gap-1 text-[10px] text-okinawa-blue animate-pulse">
                 <RefreshCw class="w-3 h-3 animate-spin" />
                 <span>同步中...</span>
@@ -2516,6 +2597,26 @@ const countdown = computed(() => {
             </div>
             <ChevronRight class="w-5 h-5 text-techo-ink/20 group-hover:translate-x-1 transition-transform" />
           </div>
+
+          <!-- Advanced Settings -->
+          <div v-if="isEditMode" class="pt-6 border-t border-techo-ink/5 space-y-3">
+            <p class="text-[10px] font-bold text-techo-ink/40 uppercase tracking-widest px-2">進階設定</p>
+            <button 
+              @click="resetDeclaration"
+              class="flex items-center justify-between w-full p-5 bg-white rounded-[24px] border border-techo-ink/5 shadow-sm hover:bg-orange-50 hover:border-orange-100 transition-all group"
+            >
+              <div class="flex items-center gap-4">
+                <div class="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center">
+                  <RotateCcw class="w-5 h-5" />
+                </div>
+                <div class="text-left">
+                  <h3 class="font-bold text-sm">重置行前宣示</h3>
+                  <p class="text-[10px] text-techo-ink/40">清除所有人的宣示紀錄</p>
+                </div>
+              </div>
+              <ChevronRight class="w-4 h-4 text-techo-ink/20 group-hover:translate-x-1 transition-transform" />
+            </button>
+          </div>
         </div>
 
         <!-- Phrases Sub-page -->
@@ -2607,17 +2708,27 @@ const countdown = computed(() => {
 
     <!-- Bottom Navigation -->
     <nav class="fixed bottom-6 left-6 right-6 bg-white/80 backdrop-blur-lg rounded-full shadow-2xl border border-white/20 p-2 flex justify-between items-center z-50">
+      <div class="flex gap-1">
+        <button 
+          v-for="view in views" 
+          :key="view.id"
+          @click="currentView = view.id"
+          :class="[
+            'flex flex-col items-center justify-center w-12 h-12 rounded-full transition-all',
+            currentView === view.id ? 'bg-okinawa-blue text-white shadow-lg' : 'text-techo-ink/40 hover:bg-techo-ink/5'
+          ]"
+        >
+          <component :is="view.icon" class="w-5 h-5" />
+          <span class="text-[10px] mt-0.5 font-bold" v-if="currentView === view.id">{{ view.label }}</span>
+        </button>
+      </div>
+
+      <!-- Edit Button moved here -->
       <button 
-        v-for="view in views" 
-        :key="view.id"
-        @click="currentView = view.id"
-        :class="[
-          'flex flex-col items-center justify-center w-12 h-12 rounded-full transition-all',
-          currentView === view.id ? 'bg-okinawa-blue text-white shadow-lg' : 'text-techo-ink/40 hover:bg-techo-ink/5'
-        ]"
+        @click="toggleEditMode"
+        :class="['w-10 h-10 rounded-full transition-all flex items-center justify-center shadow-sm active:scale-90', isEditMode ? 'bg-okinawa-blue text-white shadow-lg ring-2 ring-okinawa-blue/20' : 'bg-techo-ink/5 text-techo-ink/40 hover:bg-techo-ink/10']"
       >
-        <component :is="view.icon" class="w-5 h-5" />
-        <span class="text-[10px] mt-0.5 font-bold" v-if="currentView === view.id">{{ view.label }}</span>
+        <Edit2 class="w-4 h-4" />
       </button>
     </nav>
 
