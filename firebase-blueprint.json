@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "TripItem": {
+      "title": "Trip Item",
+      "description": "An item in the trip schedule",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "time": { "type": "string" },
+        "location": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "note": { "type": "string" },
+        "day": { "type": "number" }
+      },
+      "required": ["id", "time", "location", "title", "type", "day"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "A travel expense record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "currency": { "type": "string" },
+        "amount": { "type": "number" },
+        "twdAmount": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "location": { "type": "string" },
+        "item": { "type": "string" },
+        "payer": { "type": "string" }
+      },
+      "required": ["id", "date", "currency", "amount", "item", "payer"]
+    },
+    "PlanningItem": {
+      "title": "Planning Item",
+      "description": "A todo, packing, or shopping item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "member": { "type": "string" },
+        "tab": { "type": "string", "enum": ["todo", "packing", "shopping"] },
+        "bagType": { "type": "string" },
+        "completedBy": { "type": "string" }
+      },
+      "required": ["id", "text", "completed", "tab"]
+    }
+  },
+  "firestore": {
+    "/schedule": {
+      "schema": "TripItem",
+      "description": "Global trip schedule items"
+    },
+    "/expenses": {
+      "schema": "Expense",
+      "description": "Shared travel expenses"
+    },
+    "/planning": {
+      "schema": "PlanningItem",
+      "description": "Shared planning items"
+    }
+  }
+}

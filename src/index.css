@@ -1,0 +1,32 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap');
+
+@theme {
+  --font-sans: "Zen Maru Gothic", sans-serif;
+  
+  --color-okinawa-blue: #7BBFEA;
+  --color-okinawa-blue-dark: #5A9EC4;
+  --color-coral-white: #FFFBF0;
+  --color-emerald-green: #A8D8B9;
+  --color-accent-coral: #F5B090;
+  --color-techo-paper: #FFFDF9;
+  --color-techo-ink: #4A4A4A;
+  
+  --radius-techo: 24px;
+  --shadow-soft: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
+}
+
+@layer base {
+  body {
+    @apply bg-coral-white text-techo-ink font-sans antialiased;
+    overflow-x: hidden;
+  }
+}
+
+.techo-card {
+  @apply bg-white rounded-techo shadow-soft border border-black/5;
+}
+
+.timeline-dot {
+  @apply w-3 h-3 rounded-full border-2 border-white shadow-sm;
+}
