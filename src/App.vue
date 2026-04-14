@@ -55,7 +55,8 @@ import {
   ShoppingBag,
   Bus,
   LifeBuoy,
-  Building2
+  Building2,
+  Sparkles
 } from 'lucide-vue-next';
 import { GoogleGenAI, Type } from "@google/genai";
 import { db, auth } from './firebase';
@@ -1880,11 +1881,11 @@ const countdown = computed(() => {
               <div class="mt-4 grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p class="text-xs text-techo-ink/40">入住 (Check-in)</p>
-                  <p class="font-medium leading-tight mt-1">{{ hotel.checkInDate.split(' ')[0] }} {{ hotel.checkInDate.split(' ')[1] }}<br/>{{ hotel.checkInTime }}</p>
+                  <p class="font-medium leading-tight mt-1">{{ hotel.checkInDate.split(' (')[0] }}<br/>{{ hotel.checkInTime }}</p>
                 </div>
                 <div>
                   <p class="text-xs text-techo-ink/40">退房 (Check-out)</p>
-                  <p class="font-medium leading-tight mt-1">{{ hotel.checkOutDate.split(' ')[0] }} {{ hotel.checkOutDate.split(' ')[1] }}<br/>{{ hotel.checkOutTime }}</p>
+                  <p class="font-medium leading-tight mt-1">{{ hotel.checkOutDate.split(' (')[0] }}<br/>{{ hotel.checkOutTime }}</p>
                 </div>
               </div>
               <div class="mt-4 pt-4 border-t border-techo-ink/5 flex justify-between items-center">
@@ -2427,10 +2428,20 @@ const countdown = computed(() => {
           <a 
             href="https://translate.google.com/?sl=zh-TW&tl=ja&op=translate" 
             target="_blank"
-            class="flex items-center justify-center gap-3 w-full py-4 bg-[#1a73e8] text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-transform"
+            class="flex items-center justify-center gap-3 w-full py-4 bg-okinawa-blue text-white rounded-2xl font-bold shadow-lg shadow-okinawa-blue/20 active:scale-95 transition-transform"
           >
-            <ExternalLink class="w-5 h-5" />
+            <Languages class="w-5 h-5" />
             打開 Google 翻譯
+          </a>
+
+          <!-- Gemini Button -->
+          <a 
+            href="https://gemini.google.com/" 
+            target="_blank"
+            class="flex items-center justify-center gap-3 w-full py-4 bg-gradient-to-r from-[#4285f4] via-[#9b72cb] to-[#d96570] text-white rounded-2xl font-bold shadow-lg shadow-purple-500/20 active:scale-95 transition-transform"
+          >
+            <Sparkles class="w-5 h-5" />
+            打開 Gemini AI
           </a>
 
           <!-- Compact Exchange Calculator -->
