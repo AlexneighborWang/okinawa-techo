@@ -7,6 +7,7 @@ import {
   ClipboardList, 
   Users as UsersIcon,
   ChevronRight,
+  ChevronLeft,
   MapPin,
   Clock,
   Cloud,
@@ -194,14 +195,53 @@ const showEditItemModal = ref(false);
 const zoomedImageIndex = ref<number | null>(null);
 const zoomedSliderRef = ref<HTMLElement | null>(null);
 
-const openZoom = (index: number) => {
+const hotelDetailsSliderRef = ref<HTMLElement | null>(null);
+const hotelDetailsImageIndex = ref(0);
+
+const nextHotelImage = () => {
+  if (!selectedHotel.value) return;
+  const total = selectedHotel.value.images.length;
+  hotelDetailsImageIndex.value = (hotelDetailsImageIndex.value + 1) % total;
+  if (hotelDetailsSliderRef.value) {
+    const width = hotelDetailsSliderRef.value.clientWidth;
+    hotelDetailsSliderRef.value.scrollTo({ left: width * hotelDetailsImageIndex.value, behavior: 'smooth' });
+  }
+};
+
+const prevHotelImage = () => {
+  if (!selectedHotel.value) return;
+  const total = selectedHotel.value.images.length;
+  hotelDetailsImageIndex.value = (hotelDetailsImageIndex.value - 1 + total) % total;
+  if (hotelDetailsSliderRef.value) {
+    const width = hotelDetailsSliderRef.value.clientWidth;
+    hotelDetailsSliderRef.value.scrollTo({ left: width * hotelDetailsImageIndex.value, behavior: 'smooth' });
+  }
+};
+
+const openZoom = (index: number, behavior: ScrollBehavior = 'auto') => {
   zoomedImageIndex.value = index;
   nextTick(() => {
     if (zoomedSliderRef.value) {
       const width = zoomedSliderRef.value.clientWidth;
-      zoomedSliderRef.value.scrollTo({ left: width * index, behavior: 'auto' });
+      zoomedSliderRef.value.scrollTo({ left: width * index, behavior });
     }
   });
+};
+
+const nextImage = () => {
+  if (!selectedHotel.value || zoomedImageIndex.value === null) return;
+  const total = selectedHotel.value.images.length;
+  const nextIndex = (zoomedImageIndex.value + 1) % total;
+  // 如果是從最後一張到第一張，用 auto 避免長距離回滾，或者用 smooth 但使用者會看到回滾
+  // 為了「滑動」感，這裡先用 smooth
+  openZoom(nextIndex, 'smooth');
+};
+
+const prevImage = () => {
+  if (!selectedHotel.value || zoomedImageIndex.value === null) return;
+  const total = selectedHotel.value.images.length;
+  const prevIndex = (zoomedImageIndex.value - 1 + total) % total;
+  openZoom(prevIndex, 'smooth');
 };
 
 const editingItem = ref<any>(null);
@@ -1804,7 +1844,7 @@ const countdown = computed(() => {
             <img :src="hotel.images[0]" class="w-full h-40 object-cover" referrerPolicy="no-referrer" crossorigin="anonymous" @click="!isEditMode && openHotelModal(hotel)" />
             
             <!-- Upload Overlay in Edit Mode -->
-            <div v-if="isEditMode" class="absolute top-0 left-0 w-full h-40 bg-black/60 flex flex-col items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity p-4">
+            <div v-if="isEditMode" class="absolute top-0 left-0 w-full h-40 bg-black/60 flex flex-col items-center justify-center gap-3 transition-opacity p-4" :class="isEditMode ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'">
               <div class="flex flex-wrap justify-center gap-2 mb-2 max-h-24 overflow-y-auto p-2">
                 <div v-for="(img, idx) in hotel.images" :key="idx" class="relative w-10 h-10 rounded-lg overflow-hidden border border-white/20">
                   <img :src="img" class="w-full h-full object-cover" referrerPolicy="no-referrer" crossorigin="anonymous" />
@@ -2599,6 +2639,8 @@ const countdown = computed(() => {
         <input 
           v-model="passwordInput" 
           type="password" 
+          inputmode="numeric"
+          pattern="[0-9]*"
           class="w-full p-4 bg-techo-ink/5 rounded-2xl mb-6 text-center text-2xl tracking-widest focus:outline-none focus:ring-2 focus:ring-okinawa-blue"
           placeholder="••••"
           @keyup.enter="verifyPassword"
@@ -2731,12 +2773,26 @@ const countdown = computed(() => {
 
       <div 
         ref="zoomedSliderRef"
-        class="flex-grow flex overflow-x-auto snap-x snap-mandatory no-scrollbar"
+        class="flex-grow flex overflow-x-auto snap-x snap-mandatory no-scrollbar relative"
         @scroll="(e) => {
           const target = e.target as HTMLElement;
           zoomedImageIndex = Math.round(target.scrollLeft / target.clientWidth);
         }"
       >
+        <!-- Left/Right Navigation Buttons -->
+        <button 
+          @click.stop="prevImage" 
+          class="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 hover:bg-black/40 text-white rounded-full backdrop-blur-sm transition-all active:scale-90"
+        >
+          <ChevronLeft class="w-6 h-6" />
+        </button>
+        <button 
+          @click.stop="nextImage" 
+          class="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 hover:bg-black/40 text-white rounded-full backdrop-blur-sm transition-all active:scale-90"
+        >
+          <ChevronRight class="w-6 h-6" />
+        </button>
+
         <div v-for="(img, idx) in selectedHotel.images" :key="idx" class="min-w-full h-full flex items-center justify-center snap-center p-4">
           <img 
             :src="img" 
@@ -2761,8 +2817,15 @@ const countdown = computed(() => {
     <div v-if="selectedHotel" class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div class="bg-white w-full max-w-lg max-h-[90vh] rounded-[32px] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in duration-300">
         <!-- Header with Slider -->
-        <div class="relative h-72 flex-shrink-0">
-          <div class="flex overflow-x-auto snap-x snap-mandatory no-scrollbar h-full">
+        <div class="relative h-72 flex-shrink-0 group">
+          <div 
+            ref="hotelDetailsSliderRef"
+            class="flex overflow-x-auto snap-x snap-mandatory no-scrollbar h-full"
+            @scroll="(e) => {
+              const target = e.target as HTMLElement;
+              hotelDetailsImageIndex = Math.round(target.scrollLeft / target.clientWidth);
+            }"
+          >
             <div v-for="(img, idx) in selectedHotel.images" :key="idx" class="min-w-full h-full snap-center relative cursor-zoom-in" @click="openZoom(idx)">
               <img :src="img" class="w-full h-full object-cover" referrerPolicy="no-referrer" crossorigin="anonymous" />
               <div class="absolute top-4 right-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full text-[10px] text-white font-bold">
@@ -2770,6 +2833,21 @@ const countdown = computed(() => {
               </div>
             </div>
           </div>
+
+          <!-- Navigation Buttons -->
+          <button 
+            @click.stop="prevHotelImage" 
+            class="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
+          >
+            <ChevronLeft class="w-5 h-5" />
+          </button>
+          <button 
+            @click.stop="nextHotelImage" 
+            class="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
+          >
+            <ChevronRight class="w-5 h-5" />
+          </button>
+
           <div class="absolute bottom-4 right-4 bg-okinawa-blue/80 backdrop-blur-md px-3 py-1.5 rounded-full text-[10px] text-white font-bold z-10 animate-bounce">
             ← 左右滑動查看更多 →
           </div>
