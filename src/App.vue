@@ -291,7 +291,7 @@ const defaultHotels: HotelInfo[] = [
     checkInTime: '15:00',
     checkOutDate: '9 月 28 日 (一)',
     checkOutTime: '10:00',
-    roomType: '標準家庭房 (Standard Family Room)',
+    roomType: '標準家庭房',
     guests: '4位成人',
     location: '沖繩, 北谷町, Mihama 2-1-13, 日本',
     bookingId: '5719028315',
@@ -343,10 +343,24 @@ const migrateAndSync = () => {
     }
   }
 
-  // 2. Sync the specific booking ID for h2 if needed
-  const h2 = hotels.value.find(h => h.id === 'h2');
-  if (h2 && h2.bookingId !== '5719028315') {
-    h2.bookingId = '5719028315';
+  // 2. Sync the specific booking ID and details for h2
+  let h2 = hotels.value.find(h => h.id === 'h2');
+  const defH2 = defaultHotels.find(h => h.id === 'h2')!;
+  
+  if (!h2) {
+    h2 = { ...defH2 };
+    hotels.value.push(h2);
+    needsSave = true;
+  } else {
+    // Force update to ensure UI reflects the latest code changes
+    h2.bookingId = defH2.bookingId;
+    h2.phone = defH2.phone;
+    h2.roomType = defH2.roomType;
+    h2.checkInTime = defH2.checkInTime;
+    h2.checkOutTime = defH2.checkOutTime;
+    h2.location = defH2.location;
+    h2.name = defH2.name;
+    h2.nameEn = defH2.nameEn;
     needsSave = true;
   }
 
@@ -368,24 +382,30 @@ const migrateAndSync = () => {
     }
   });
 
-  // 5. Force update names and navigation queries for existing hotels
+  // 5. Update names and navigation queries ONLY if missing
   hotels.value.forEach(h => {
     const def = defaultHotels.find(dh => dh.id === h.id);
     if (def) {
-      h.name = def.name;
-      h.nameEn = def.nameEn;
-      h.mapUrl = def.mapUrl;
-      h.roomType = def.roomType;
+      if (!h.name) h.name = def.name;
+      if (!h.nameEn) h.nameEn = def.nameEn;
+      if (!h.mapUrl) h.mapUrl = def.mapUrl;
+      if (!h.roomType) h.roomType = def.roomType;
       needsSave = true;
     }
   });
 
   if (needsSave) {
     localStorage.setItem('okinawa_hotels', JSON.stringify(hotels.value));
+    // If logged in, sync the corrected data to Firebase
+    if (userId.value) {
+      hotels.value.forEach(h => {
+        syncToFirebase('hotels', h.id, h);
+      });
+    }
   }
 };
 
-migrateAndSync();
+// migrateAndSync(); // Moved to onMounted/Auth
 
 const esimMembers = ['爸', '媽', '德', '珊'];
 const esims = ref<string[]>(JSON.parse(localStorage.getItem('okinawa_esims') || '["", "", "", ""]'));
@@ -877,25 +897,64 @@ const triggerEsimUpload = (index: number) => {
   if (input) input.click();
 };
 
+const compressImage = (base64Str: string, maxWidth = 600): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      if (width > maxWidth) {
+        height = (maxWidth / width) * height;
+        width = maxWidth;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.4)); // 降低品質至 0.4 以確保檔案更小
+    };
+  });
+};
+
 const handleHotelImageUpload = (event: Event, hotelId: string) => {
   const target = event.target as HTMLInputElement;
   if (target.files) {
     const hotel = hotels.value.find(h => h.id === hotelId);
     if (!hotel) return;
 
-    Array.from(target.files).forEach(file => {
+    // 限制最多 8 張照片 (稍微放寬一點)
+    if (hotel.images.length >= 8) {
+      showToast('每個住宿點最多只能上傳 8 張照片', 'error');
+      return;
+    }
+
+    const filesToUpload = Array.from(target.files).slice(0, 8 - hotel.images.length);
+
+    filesToUpload.forEach(file => {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        hotel.images.push(result);
-        localStorage.setItem('okinawa_hotels', JSON.stringify(hotels.value));
+      reader.onload = async (e) => {
+        const rawResult = e.target?.result as string;
+        try {
+          const compressedResult = await compressImage(rawResult);
+          hotel.images.push(compressedResult);
+          localStorage.setItem('okinawa_hotels', JSON.stringify(hotels.value));
+          await syncToFirebase('hotels', hotelId, hotel);
+          showToast('照片上傳成功', 'success');
+        } catch (err) {
+          console.error('Upload failed:', err);
+          showToast('上傳失敗，圖片可能太大', 'error');
+        }
       };
       reader.readAsDataURL(file);
     });
   }
 };
 
-const removeHotelImage = (hotelId: string, index: number) => {
+const removeHotelImage = async (hotelId: string, index: number) => {
   const hotel = hotels.value.find(h => h.id === hotelId);
   if (!hotel) return;
 
@@ -904,6 +963,7 @@ const removeHotelImage = (hotelId: string, index: number) => {
     hotel.images = [`https://picsum.photos/seed/${hotel.id}/600/300`];
   }
   localStorage.setItem('okinawa_hotels', JSON.stringify(hotels.value));
+  await syncToFirebase('hotels', hotelId, hotel);
 };
 
 const triggerHotelImageUpload = (hotelId: string) => {
@@ -1103,6 +1163,14 @@ const userId = ref<string | null>(null);
 const syncToFirebase = async (collectionName: string, id: string, data: any) => {
   if (!userId.value) return;
   try {
+    // Check data size (rough estimate)
+    const dataStr = JSON.stringify(data);
+    const sizeInBytes = new Blob([dataStr]).size;
+    if (sizeInBytes > 1000000) {
+      showToast(`資料過大 (${(sizeInBytes / 1024 / 1024).toFixed(2)}MB)，無法同步到雲端。請減少圖片數量。`, 'error');
+      return;
+    }
+
     await setDoc(doc(db, collectionName, id), {
       ...data,
       updatedAt: new Date().toISOString(),
@@ -1128,6 +1196,7 @@ onMounted(async () => {
     if (user) {
       userId.value = user.uid;
       isAuthReady.value = true;
+      migrateAndSync();
       setupRealtimeListeners();
     } else {
       isAuthReady.value = false;
@@ -1148,13 +1217,26 @@ const loginWithGoogle = async () => {
 
 let unsubscribes: (() => void)[] = [];
 
+const isSyncing = reactive({
+  schedule: false,
+  expenses: false,
+  planning: false,
+  hotels: false
+});
+
 const setupRealtimeListeners = () => {
   // Clear existing listeners
   unsubscribes.forEach(unsub => unsub());
   unsubscribes = [];
 
+  isSyncing.schedule = true;
+  isSyncing.expenses = true;
+  isSyncing.planning = true;
+  isSyncing.hotels = true;
+
   // 1. Schedule Sync
   const scheduleUnsub = onSnapshot(collection(db, 'schedule'), (snapshot) => {
+    isSyncing.schedule = false;
     snapshot.docChanges().forEach((change) => {
       const data = change.doc.data();
       const day = data.day;
@@ -1178,6 +1260,7 @@ const setupRealtimeListeners = () => {
 
   // 2. Expenses Sync
   const expensesUnsub = onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), (snapshot) => {
+    isSyncing.expenses = false;
     snapshot.docChanges().forEach((change) => {
       const data = change.doc.data();
       if (change.type === 'added' || change.type === 'modified') {
@@ -1197,6 +1280,7 @@ const setupRealtimeListeners = () => {
 
   // 3. Planning Sync
   const planningUnsub = onSnapshot(collection(db, 'planning'), (snapshot) => {
+    isSyncing.planning = false;
     snapshot.docChanges().forEach((change) => {
       const data = change.doc.data();
       const tab = data.tab;
@@ -1214,6 +1298,33 @@ const setupRealtimeListeners = () => {
     });
   });
   unsubscribes.push(planningUnsub);
+
+  // 4. Hotels Sync
+  const hotelsUnsub = onSnapshot(collection(db, 'hotels'), (snapshot) => {
+    isSyncing.hotels = false;
+    console.log('Hotels snapshot received, docs:', snapshot.size);
+    snapshot.docChanges().forEach((change) => {
+      const data = change.doc.data();
+      console.log(`Hotel ${change.type}:`, change.doc.id, data.name);
+      if (change.type === 'added' || change.type === 'modified') {
+        const index = hotels.value.findIndex(h => h.id === change.doc.id);
+        const newHotel = { ...data, id: change.doc.id } as HotelInfo;
+        if (index !== -1) {
+          hotels.value[index] = newHotel;
+        } else {
+          hotels.value.push(newHotel);
+        }
+      } else if (change.type === 'removed') {
+        hotels.value = hotels.value.filter(h => h.id !== change.doc.id);
+      }
+    });
+    // 確保排序一致，避免畫面跳動
+    hotels.value.sort((a, b) => a.id.localeCompare(b.id));
+  }, (error) => {
+    console.error('Hotels sync error:', error);
+    showToast('住宿資料同步失敗', 'error');
+  });
+  unsubscribes.push(hotelsUnsub);
 };
 
 onUnmounted(() => {
@@ -1232,6 +1343,10 @@ watch(mainTitle, (newVal) => {
 watch(subTitle, (newVal) => {
   localStorage.setItem('okinawa_sub_title', newVal);
 });
+
+watch(hotels, (newVal) => {
+  localStorage.setItem('okinawa_hotels', JSON.stringify(newVal));
+}, { deep: true });
 
 const showScrollTop = ref(false);
 const handleScroll = () => {
@@ -1660,19 +1775,39 @@ const countdown = computed(() => {
 
         <!-- Accommodation Section -->
         <div v-if="bookingCategory === 'stay'" class="space-y-4">
-          <div class="flex items-center gap-2 text-xs font-bold text-techo-ink/40 uppercase tracking-widest pl-1">
-            <Hotel class="w-3 h-3" />
-            <span>住宿預訂</span>
+          <div class="flex items-center justify-between pl-1">
+            <div class="flex items-center gap-2 text-xs font-bold text-techo-ink/40 uppercase tracking-widest">
+              <Hotel class="w-3 h-3" />
+              <span>住宿預訂</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button 
+                @click="migrateAndSync(); setupRealtimeListeners();" 
+                class="p-1.5 hover:bg-techo-ink/5 rounded-full transition-colors text-techo-ink/40"
+                title="重新整理資料"
+              >
+                <RotateCcw class="w-3.5 h-3.5" />
+              </button>
+              <div v-if="isSyncing.hotels" class="flex items-center gap-1 text-[10px] text-okinawa-blue animate-pulse">
+                <RefreshCw class="w-3 h-3 animate-spin" />
+                <span>同步中...</span>
+              </div>
+            </div>
           </div>
           
+          <div v-if="hotels.length === 0" class="techo-card p-10 text-center opacity-40">
+            <Hotel class="w-12 h-12 mx-auto mb-4 opacity-20" />
+            <p>尚無住宿資料</p>
+          </div>
+
           <div v-for="hotel in hotels" :key="hotel.id" class="techo-card overflow-hidden cursor-pointer active:scale-[0.98] transition-transform relative group">
-            <img :src="hotel.images[0]" class="w-full h-40 object-cover" referrerPolicy="no-referrer" @click="!isEditMode && openHotelModal(hotel)" />
+            <img :src="hotel.images[0]" class="w-full h-40 object-cover" referrerPolicy="no-referrer" crossorigin="anonymous" @click="!isEditMode && openHotelModal(hotel)" />
             
             <!-- Upload Overlay in Edit Mode -->
             <div v-if="isEditMode" class="absolute top-0 left-0 w-full h-40 bg-black/60 flex flex-col items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity p-4">
               <div class="flex flex-wrap justify-center gap-2 mb-2 max-h-24 overflow-y-auto p-2">
                 <div v-for="(img, idx) in hotel.images" :key="idx" class="relative w-10 h-10 rounded-lg overflow-hidden border border-white/20">
-                  <img :src="img" class="w-full h-full object-cover" />
+                  <img :src="img" class="w-full h-full object-cover" referrerPolicy="no-referrer" crossorigin="anonymous" />
                   <button @click.stop="removeHotelImage(hotel.id, idx)" class="absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl-lg">
                     <X class="w-3 h-3" />
                   </button>
@@ -2607,6 +2742,7 @@ const countdown = computed(() => {
             :src="img" 
             class="max-w-full max-h-full object-contain rounded-lg shadow-2xl" 
             referrerPolicy="no-referrer" 
+            crossorigin="anonymous"
           />
         </div>
       </div>
@@ -2628,7 +2764,7 @@ const countdown = computed(() => {
         <div class="relative h-72 flex-shrink-0">
           <div class="flex overflow-x-auto snap-x snap-mandatory no-scrollbar h-full">
             <div v-for="(img, idx) in selectedHotel.images" :key="idx" class="min-w-full h-full snap-center relative cursor-zoom-in" @click="openZoom(idx)">
-              <img :src="img" class="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <img :src="img" class="w-full h-full object-cover" referrerPolicy="no-referrer" crossorigin="anonymous" />
               <div class="absolute top-4 right-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full text-[10px] text-white font-bold">
                 {{ idx + 1 }} / {{ selectedHotel.images.length }}
               </div>

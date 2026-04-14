@@ -46,6 +46,30 @@
         "completedBy": { "type": "string" }
       },
       "required": ["id", "text", "completed", "tab"]
+    },
+    "Hotel": {
+      "title": "Hotel",
+      "description": "Accommodation information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameEn": { "type": "string" },
+        "checkInDate": { "type": "string" },
+        "checkInTime": { "type": "string" },
+        "checkOutDate": { "type": "string" },
+        "checkOutTime": { "type": "string" },
+        "roomType": { "type": "string" },
+        "guests": { "type": "string" },
+        "location": { "type": "string" },
+        "bookingId": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "provider": { "type": "string" },
+        "phone": { "type": "string" },
+        "freeCancellationDate": { "type": "string" },
+        "mapUrl": { "type": "string" }
+      },
+      "required": ["id", "name", "images"]
     }
   },
   "firestore": {
@@ -60,6 +84,10 @@
     "/planning": {
       "schema": "PlanningItem",
       "description": "Shared planning items"
+    },
+    "/hotels": {
+      "schema": "Hotel",
+      "description": "Shared accommodation information"
     }
   }
 }
