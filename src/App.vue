@@ -254,13 +254,12 @@ const selectedFlightCode = ref<string | null>(null);
 const flightDetailsData: Record<string, any> = {
   'IT232': {
     title: '去程 IT232',
-    type: 'table',
-    headers: ['乘客', '託運', '餐點', '座位'],
-    rows: [
-      { name: '爸', baggage: '20 公斤', meal: '-', seat: '8A' },
-      { name: '媽', baggage: '20 公斤', meal: '-', seat: '8B' },
-      { name: '德', baggage: '20 公斤', meal: '-', seat: '9A' },
-      { name: '珊', baggage: '20 公斤', meal: '-', seat: '9B' },
+    type: 'grid',
+    passengers: [
+      { name: '爸', items: ['託運行李 20kg', '7公斤隨身行李 (內含)', '座位 8A'] },
+      { name: '媽', items: ['託運行李 20kg', '7公斤隨身行李 (內含)', '座位 8B'] },
+      { name: '德', items: ['託運行李 20kg', '7公斤隨身行李 (內含)', '座位 9A'] },
+      { name: '珊', items: ['託運行李 20kg', '7公斤隨身行李 (內含)', '座位 9B'] },
     ]
   },
   'FD 231': {
@@ -664,20 +663,20 @@ const selectedBagType = ref('隨身小包');
 
 const defaultPlanning = {
   todo: [
-    { id: 1, text: '預約租車', completed: true, member: '全體' },
-    { id: 2, text: '換日幣', completed: false, member: '全體' },
-    { id: 3, text: '申請國際駕照', completed: false, member: '全體' },
-    { id: 4, text: '購買保險', completed: false, member: '全體' },
-    { id: 5, text: '預約餐廳', completed: false, member: '全體' }
+    { id: 'p1', text: '預約租車', completed: true, member: '全體' },
+    { id: 'p2', text: '換日幣', completed: false, member: '全體' },
+    { id: 'p3', text: '申請國際駕照', completed: false, member: '全體' },
+    { id: 'p4', text: '購買保險', completed: false, member: '全體' },
+    { id: 'p5', text: '預約餐廳', completed: false, member: '全體' }
   ],
   packing: [
-    { id: 6, text: '護照', completed: false, member: '全體' },
-    { id: 7, text: '日幣現金', completed: false, member: '全體' },
-    { id: 8, text: '駕照正本+譯本', completed: false, member: '全體' }
+    { id: 'p6', text: '護照', completed: false, member: '全體' },
+    { id: 'p7', text: '日幣現金', completed: false, member: '全體' },
+    { id: 'p8', text: '駕照正本+譯本', completed: false, member: '全體' }
   ],
   shopping: [
-    { id: 9, text: '合利他命', completed: false, member: '全體' },
-    { id: 10, text: '蒟蒻果凍', completed: false, member: '全體' }
+    { id: 'p9', text: '合利他命', completed: false, member: '全體' },
+    { id: 'p10', text: '蒟蒻果凍', completed: false, member: '全體' }
   ]
 };
 
@@ -1210,46 +1209,46 @@ const selectedDay = ref('9/25');
 
 const defaultScheduleItems = {
   '9/25': [
-    { time: '20:50', title: '那霸機場', type: 'transport', typeLabel: '交通', location: 'Naha Airport', color: 'bg-blue-100 text-blue-600', note: 'IT 232 抵達沖繩，辦理入境。' },
-    { time: '21:50', title: '那霸機場站', type: 'transport', typeLabel: '交通', location: '那霸機場站', color: 'bg-blue-100 text-blue-600', note: '步行至國內線航廈 2 樓。' },
-    { time: '22:00', title: '搭乘單軌電車', type: 'transport', typeLabel: '交通', location: '美榮橋站', color: 'bg-blue-100 text-blue-600', note: '車資 ¥300，約 15 分鐘。' },
-    { time: '22:20', title: '里士滿那霸久茂地酒店', type: 'accommodation', typeLabel: '住宿', location: 'Richmond Hotel Naha Kumoji', color: 'bg-purple-100 text-purple-600', note: '步行約 5 分鐘抵達飯店 Check-in。' },
-    { time: '22:45', title: '國際通宵夜', type: 'food', typeLabel: '美食', location: '國際通', color: 'bg-orange-100 text-orange-600', note: '自由選擇暖暮拉麵或居酒屋。' },
+    { id: 's1', time: '20:50', title: '那霸機場', type: 'transport', typeLabel: '交通', location: 'Naha Airport', color: 'bg-blue-100 text-blue-600', note: 'IT 232 抵達沖繩，辦理入境。' },
+    { id: 's2', time: '21:50', title: '那霸機場站', type: 'transport', typeLabel: '交通', location: '那霸機場站', color: 'bg-blue-100 text-blue-600', note: '步行至國內線航廈 2 樓。' },
+    { id: 's3', time: '22:00', title: '搭乘單軌電車', type: 'transport', typeLabel: '交通', location: '美榮橋站', color: 'bg-blue-100 text-blue-600', note: '車資 ¥300，約 15 分鐘。' },
+    { id: 's4', time: '22:20', title: '里士滿那霸久茂地酒店', type: 'accommodation', typeLabel: '住宿', location: 'Richmond Hotel Naha Kumoji', color: 'bg-purple-100 text-purple-600', note: '步行約 5 分鐘抵達飯店 Check-in。' },
+    { id: 's5', time: '22:45', title: '國際通宵夜', type: 'food', typeLabel: '美食', location: '國際通', color: 'bg-orange-100 text-orange-600', note: '自由選擇暖暮拉麵或居酒屋。' },
   ],
   '9/26': [
-    { time: '09:20', title: '波上宮', type: 'sightseeing', typeLabel: '景點', location: 'Naminoue Shrine', color: 'bg-emerald-100 text-emerald-600', note: '參拜、購買御守、海灘拍照。' },
-    { time: '10:30', title: '第一牧志公設市場', type: 'food', typeLabel: '美食', location: 'Makishi Market', color: 'bg-orange-100 text-orange-600', note: '午餐推薦海鮮、天婦羅。' },
-    { time: '13:00', title: '搭乘計程車', type: 'transport', typeLabel: '交通', location: '新都心', color: 'bg-blue-100 text-blue-600', note: '前往新都心（車資約 ¥1,300）。' },
-    { time: '14:00', title: 'San-A Naha Main Place', type: 'sightseeing', typeLabel: '景點', location: 'San-A Naha Main Place', color: 'bg-emerald-100 text-emerald-600', note: '大型超市與日系百貨採買。' },
-    { time: '16:30', title: '國際通', type: 'sightseeing', typeLabel: '景點', location: '國際通', color: 'bg-emerald-100 text-emerald-600', note: '逛街、買伴手禮、逛藥妝店。' },
-    { time: '19:30', title: '國際通晚餐', type: 'food', typeLabel: '美食', location: '國際通', color: 'bg-orange-100 text-orange-600', note: '自由選擇晚餐。' },
+    { id: 's6', time: '09:20', title: '波上宮', type: 'sightseeing', typeLabel: '景點', location: 'Naminoue Shrine', color: 'bg-emerald-100 text-emerald-600', note: '參拜、購買御守、海灘拍照。' },
+    { id: 's7', time: '10:30', title: '第一牧志公設市場', type: 'food', typeLabel: '美食', location: 'Makishi Market', color: 'bg-orange-100 text-orange-600', note: '午餐推薦海鮮、天婦羅。' },
+    { id: 's8', time: '13:00', title: '搭乘計程車', type: 'transport', typeLabel: '交通', location: '新都心', color: 'bg-blue-100 text-blue-600', note: '前往新都心（車資約 ¥1,300）。' },
+    { id: 's9', time: '14:00', title: 'San-A Naha Main Place', type: 'sightseeing', typeLabel: '景點', location: 'San-A Naha Main Place', color: 'bg-emerald-100 text-emerald-600', note: '大型超市與日系百貨採買。' },
+    { id: 's10', time: '16:30', title: '國際通', type: 'sightseeing', typeLabel: '景點', location: '國際通', color: 'bg-emerald-100 text-emerald-600', note: '逛街、買伴手禮、逛藥妝店。' },
+    { id: 's11', time: '19:30', title: '國際通晚餐', type: 'food', typeLabel: '美食', location: '國際通', color: 'bg-orange-100 text-orange-600', note: '自由選擇晚餐。' },
   ],
   '9/27': [
-    { time: '09:00', title: '租車公司取車', type: 'transport', typeLabel: '交通', location: '美榮橋站附近', color: 'bg-blue-100 text-blue-600', note: '開始自駕行程。' },
-    { time: '09:30', title: '泊港漁市場', type: 'food', typeLabel: '美食', location: 'Tomari Iyumachi', color: 'bg-orange-100 text-orange-600', note: '海鮮早餐（推薦：生蠔、海膽燒）。' },
-    { time: '10:30', title: '漁師食堂 大盤振舞', type: 'food', typeLabel: '美食', location: 'Ryoshi Shokudo Obanburumai Sakana Daitoryo', color: 'bg-orange-100 text-orange-600', note: '超豪邁海鮮丼飯，就在漁市場附近。' },
-    { time: '12:00', title: 'San-A PARCO CITY', type: 'food', typeLabel: '美食', location: 'San-A PARCO CITY', color: 'bg-orange-100 text-orange-600', note: '午餐（無敵海景美食街）＋逛百貨。' },
-    { time: '16:00', title: '美國村', type: 'sightseeing', typeLabel: '景點', location: 'American Village', color: 'bg-emerald-100 text-emerald-600', note: '散步看夕陽、拍照（推薦：Sunset Beach）。' },
-    { time: '19:00', title: '琉球之牛燒肉', type: 'food', typeLabel: '美食', location: '琉球之牛', color: 'bg-orange-100 text-orange-600', note: '建議預約，或迴轉壽司市場。' },
+    { id: 's12', time: '09:00', title: '租車公司取車', type: 'transport', typeLabel: '交通', location: '沖繩縣那霸市牧志2-17-10', color: 'bg-blue-100 text-blue-600', note: 'ORIX 美榮橋站前 外語櫃檯。' },
+    { id: 's13', time: '09:30', title: '泊港漁市場', type: 'food', typeLabel: '美食', location: 'Tomari Iyumachi', color: 'bg-orange-100 text-orange-600', note: '海鮮早餐（推薦：生蠔、海膽燒）。' },
+    { id: 's14', time: '10:30', title: '漁師食堂 大盤振舞', type: 'food', typeLabel: '美食', location: 'Ryoshi Shokudo Obanburumai Sakana Daitoryo', color: 'bg-orange-100 text-orange-600', note: '超豪邁海鮮丼飯，就在漁市場附近。' },
+    { id: 's15', time: '12:00', title: 'San-A PARCO CITY', type: 'food', typeLabel: '美食', location: 'San-A PARCO CITY', color: 'bg-orange-100 text-orange-600', note: '午餐（無敵海景美食街）＋逛百貨。' },
+    { id: 's16', time: '16:00', title: '美國村', type: 'sightseeing', typeLabel: '景點', location: 'American Village', color: 'bg-emerald-100 text-emerald-600', note: '散步看夕陽、拍照（推薦：Sunset Beach）。' },
+    { id: 's17', time: '19:00', title: '琉球之牛燒肉', type: 'food', typeLabel: '美食', location: '琉球之牛', color: 'bg-orange-100 text-orange-600', note: '建議預約，或迴轉壽司市場。' },
   ],
   '9/28': [
-    { time: '07:30', title: '豬肉蛋飯糰 Potama', type: 'food', typeLabel: '美食', location: '豬肉蛋飯糰 Potama', color: 'bg-orange-100 text-orange-600', note: '外帶早餐（車上享用）。' },
-    { time: '08:45', title: '萬座毛', type: 'sightseeing', typeLabel: '景點', location: 'Manzamo', color: 'bg-emerald-100 text-emerald-600', note: '景點拍照、欣賞象鼻岩。' },
-    { time: '10:00', title: '道之驛許田', type: 'sightseeing', typeLabel: '景點', location: 'Kyoda Rest Area', color: 'bg-emerald-100 text-emerald-600', note: '購買優惠實體票（需現金）。' },
-    { time: '11:00', title: '名護漁港食堂', type: 'food', typeLabel: '美食', location: '名護漁港食堂', color: 'bg-orange-100 text-orange-600', note: '僅收現金，推鮪魚丼、漁師汁。' },
-    { time: '12:50', title: '古宇利島海洋塔', type: 'sightseeing', typeLabel: '景點', location: 'Kouri Ocean Tower', color: 'bg-emerald-100 text-emerald-600', note: '看 Tiffany 藍海景。' },
-    { time: '14:30', title: '美麗海水族館', type: 'sightseeing', typeLabel: '景點', location: 'Churaumi Aquarium', color: 'bg-emerald-100 text-emerald-600', note: '海豚秀、鯨鯊餵食秀、黑潮探險。' },
-    { time: '17:00', title: 'Shinmei Coffee', type: 'food', typeLabel: '美食', location: 'Shinmei Coffee Okinawa', color: 'bg-orange-100 text-orange-600', note: '在備瀨附近的特色咖啡廳，稍作休息。' },
-    { time: '17:45', title: '備瀨一線天', type: 'sightseeing', typeLabel: '景點', location: 'Bise no Warumi', color: 'bg-emerald-100 text-emerald-600', note: '神聖的海邊岩石裂縫秘境，鄰近水族館。' },
-    { time: '19:30', title: 'Yakiniku Kochan', type: 'food', typeLabel: '美食', location: 'Yakiniku Kochan', color: 'bg-orange-100 text-orange-600', note: '燒肉晚餐（建議預約）。' },
+    { id: 's18', time: '07:30', title: '豬肉蛋飯糰 Potama', type: 'food', typeLabel: '美食', location: '豬肉蛋飯糰 Potama', color: 'bg-orange-100 text-orange-600', note: '外帶早餐（車上享用）。' },
+    { id: 's19', time: '08:45', title: '萬座毛', type: 'sightseeing', typeLabel: '景點', location: 'Manzamo', color: 'bg-emerald-100 text-emerald-600', note: '景點拍照、欣賞象鼻岩。' },
+    { id: 's20', time: '10:00', title: '道之驛許田', type: 'sightseeing', typeLabel: '景點', location: 'Kyoda Rest Area', color: 'bg-emerald-100 text-emerald-600', note: '購買優惠實體票（需現金）。' },
+    { id: 's21', time: '11:00', title: '名護漁港食堂', type: 'food', typeLabel: '美食', location: '名護漁港食堂', color: 'bg-orange-100 text-orange-600', note: '僅收現金，推鮪魚丼、漁師汁。' },
+    { id: 's22', time: '12:50', title: '古宇利島海洋塔', type: 'sightseeing', typeLabel: '景點', location: 'Kouri Ocean Tower', color: 'bg-emerald-100 text-emerald-600', note: '看 Tiffany 藍海景。' },
+    { id: 's23', time: '14:30', title: '美麗海水族館', type: 'sightseeing', typeLabel: '景點', location: 'Churaumi Aquarium', color: 'bg-emerald-100 text-emerald-600', note: '海豚秀、鯨鯊餵食秀、黑潮探險。' },
+    { id: 's24', time: '17:00', title: 'Shinmei Coffee', type: 'food', typeLabel: '美食', location: 'Shinmei Coffee Okinawa', color: 'bg-orange-100 text-orange-600', note: '在備瀨附近的特色咖啡廳，稍作休息。' },
+    { id: 's25', time: '17:45', title: '備瀨一線天', type: 'sightseeing', typeLabel: '景點', location: 'Bise no Warumi', color: 'bg-emerald-100 text-emerald-600', note: '神聖的海邊岩石裂縫秘境，鄰近水族館。' },
+    { id: 's26', time: '19:30', title: 'Yakiniku Kochan', type: 'food', typeLabel: '美食', location: 'Yakiniku Kochan', color: 'bg-orange-100 text-orange-600', note: '燒肉晚餐（建議預約）。' },
   ],
   '9/29': [
-    { time: '09:00', title: '玉泉洞 / 沖繩世界', type: 'sightseeing', typeLabel: '景點', location: 'Okinawa World', color: 'bg-emerald-100 text-emerald-600', note: '探索鐘乳石洞。' },
-    { time: '10:45', title: '瀨長島幸福鬆餅', type: 'food', typeLabel: '美食', location: '幸福鬆餅', color: 'bg-orange-100 text-orange-600', note: '直接去 32 號店鋪點餐外帶。' },
-    { time: '11:45', title: 'ASHIBINAA Outlet', type: 'sightseeing', typeLabel: '景點', location: 'ASHIBINAA Outlet', color: 'bg-emerald-100 text-emerald-600', note: '最後採買。' },
-    { time: '13:30', title: '豐崎還車', type: 'transport', typeLabel: '交通', location: '豐崎租車店', color: 'bg-blue-100 text-blue-600', note: '建議預留加油時間。' },
-    { time: '14:30', title: '那霸機場', type: 'transport', typeLabel: '交通', location: '那霸機場', color: 'bg-blue-100 text-blue-600', note: '國內線航廈 2 樓最後採購伴手禮。' },
-    { time: '16:55', title: '搭機返台', type: 'transport', typeLabel: '交通', location: '那霸機場', color: 'bg-blue-100 text-blue-600', note: 'FD 231 返程。' },
+    { id: 's27', time: '09:00', title: '玉泉洞 / 沖繩世界', type: 'sightseeing', typeLabel: '景點', location: 'Okinawa World', color: 'bg-emerald-100 text-emerald-600', note: '探索鐘乳石洞。' },
+    { id: 's28', time: '10:45', title: '瀨長島幸福鬆餅', type: 'food', typeLabel: '美食', location: '幸福鬆餅', color: 'bg-orange-100 text-orange-600', note: '直接去 32 號店鋪點餐外帶。' },
+    { id: 's29', time: '11:45', title: 'ASHIBINAA Outlet', type: 'sightseeing', typeLabel: '景點', location: 'ASHIBINAA Outlet', color: 'bg-emerald-100 text-emerald-600', note: '最後採買。' },
+    { id: 's30', time: '13:30', title: '豐崎還車', type: 'transport', typeLabel: '交通', location: '沖繩縣豐見城市豐崎1-1174', color: 'bg-blue-100 text-blue-600', note: 'ORIX 那霸機場 外語櫃檯。' },
+    { id: 's31', time: '14:30', title: '那霸機場', type: 'transport', typeLabel: '交通', location: '那霸機場', color: 'bg-blue-100 text-blue-600', note: '國內線航廈 2 樓最後採購伴手禮。' },
+    { id: 's32', time: '16:55', title: '搭機返台', type: 'transport', typeLabel: '交通', location: '那霸機場', color: 'bg-blue-100 text-blue-600', note: 'FD 231 返程。' },
   ],
 };
 
@@ -1279,8 +1278,11 @@ const syncToFirebase = async (collectionName: string, id: string, data: any) => 
       return;
     }
 
+    // Clean data of undefined fields (Firestore doesn't support them)
+    const cleanData = JSON.parse(JSON.stringify(data));
+
     await setDoc(doc(db, collectionName, id), {
-      ...data,
+      ...cleanData,
       updatedAt: new Date().toISOString(),
       updatedBy: userId.value
     });
@@ -1388,7 +1390,7 @@ const setupRealtimeListeners = () => {
       if (!allScheduleItems[day]) allScheduleItems[day] = [];
       
       if (change.type === 'added' || change.type === 'modified') {
-        const index = allScheduleItems[day].findIndex(item => item.id === change.doc.id);
+        const index = allScheduleItems[day].findIndex(item => String(item.id) === String(change.doc.id));
         const newItem = { ...data, id: change.doc.id };
         if (index !== -1) {
           allScheduleItems[day][index] = newItem;
@@ -1396,7 +1398,7 @@ const setupRealtimeListeners = () => {
           allScheduleItems[day].push(newItem);
         }
       } else if (change.type === 'removed') {
-        allScheduleItems[day] = allScheduleItems[day].filter(item => item.id !== change.doc.id);
+        allScheduleItems[day] = allScheduleItems[day].filter(item => String(item.id) !== String(change.doc.id));
       }
       allScheduleItems[day].sort((a, b) => a.time.localeCompare(b.time));
     });
@@ -1409,7 +1411,7 @@ const setupRealtimeListeners = () => {
     snapshot.docChanges().forEach((change) => {
       const data = change.doc.data();
       if (change.type === 'added' || change.type === 'modified') {
-        const index = expenses.value.findIndex(e => e.id === change.doc.id);
+        const index = expenses.value.findIndex(e => String(e.id) === String(change.doc.id));
         const newExpense = { ...data, id: change.doc.id };
         if (index !== -1) {
           expenses.value[index] = newExpense;
@@ -1417,7 +1419,7 @@ const setupRealtimeListeners = () => {
           expenses.value.unshift(newExpense);
         }
       } else if (change.type === 'removed') {
-        expenses.value = expenses.value.filter(e => e.id !== change.doc.id);
+        expenses.value = expenses.value.filter(e => String(e.id) !== String(change.doc.id));
       }
     });
   });
@@ -1432,7 +1434,7 @@ const setupRealtimeListeners = () => {
       if (!tab || !planningData.value[tab]) return; // Safety check
       
       if (change.type === 'added' || change.type === 'modified') {
-        const index = planningData.value[tab].findIndex((i: any) => i.id === change.doc.id);
+        const index = planningData.value[tab].findIndex((i: any) => String(i.id) === String(change.doc.id));
         const newItem = { ...data, id: change.doc.id };
         if (index !== -1) {
           planningData.value[tab][index] = newItem;
@@ -1440,7 +1442,7 @@ const setupRealtimeListeners = () => {
           planningData.value[tab].push(newItem);
         }
       } else if (change.type === 'removed') {
-        planningData.value[tab] = planningData.value[tab].filter((i: any) => i.id !== change.doc.id);
+        planningData.value[tab] = planningData.value[tab].filter((i: any) => String(i.id) !== String(change.doc.id));
       }
     });
   });
@@ -1560,11 +1562,35 @@ const isDatePassed = (dateStr: string) => {
 
 const scheduleItems = computed(() => allScheduleItems[selectedDay.value] || []);
 
-const countdown = computed(() => {
-  const target = new Date('2026-09-25');
-  const now = new Date();
+const currentTime = ref(new Date());
+let timer: any = null;
+
+onMounted(() => {
+  timer = setInterval(() => {
+    currentTime.value = new Date();
+  }, 60000); // Update every minute
+});
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer);
+});
+
+const countdownData = computed(() => {
+  const target = new Date('2026-09-25T00:00:00');
+  const now = currentTime.value;
   const diff = target.getTime() - now.getTime();
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  
+  if (diff <= 0) return { days: 0, hours: 0, progress: 100 };
+  
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  
+  // Progress calculation: assuming a 180-day lead time
+  const totalDuration = 180 * 24 * 60 * 60 * 1000;
+  const elapsed = totalDuration - diff;
+  const progress = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
+  
+  return { days, hours, progress };
 });
 
 </script>
@@ -1631,11 +1657,30 @@ const countdown = computed(() => {
               <CheckCircle2 class="w-5 h-5" />
               <span>行前宣示</span>
             </button>
-            <div v-if="countdown > 0" class="flex items-center gap-2 text-sm font-bold text-orange-500 bg-orange-50 px-5 py-3 rounded-xl border border-orange-100 shadow-sm">
-              <Clock class="w-5 h-5" />
-              <span>出發倒數 {{ countdown }} 天</span>
-            </div>
           </div>
+        </div>
+      </div>
+
+      <!-- New Countdown Card (Only in Schedule View) -->
+      <div v-if="currentView === 'schedule' && (countdownData.days > 0 || countdownData.hours > 0)" class="mt-8 bg-emerald-green rounded-[32px] p-6 text-white shadow-xl relative overflow-hidden">
+        <div class="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+        <div class="flex justify-between items-center mb-6 relative z-10">
+          <div class="bg-white/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-2 border border-white/10">
+            <Plane class="w-4 h-4" />
+            <span class="text-[10px] font-black uppercase tracking-widest">距離出發</span>
+          </div>
+          <div class="flex items-baseline gap-1">
+            <span class="text-3xl font-black tracking-tighter">{{ countdownData.days }}</span>
+            <span class="text-xs font-bold opacity-70">天</span>
+            <span class="text-xl font-black tracking-tighter ml-2">{{ countdownData.hours }}</span>
+            <span class="text-xs font-bold opacity-70">時</span>
+          </div>
+        </div>
+        <div class="w-full h-2 bg-white/20 rounded-full overflow-hidden relative z-10">
+          <div 
+            class="h-full bg-white transition-all duration-1000 ease-out rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)]"
+            :style="{ width: `${countdownData.progress}%` }"
+          ></div>
         </div>
       </div>
     </header>
@@ -1755,16 +1800,12 @@ const countdown = computed(() => {
                   <!-- Location (Clickable Link) -->
                   <a 
                     v-if="item.location"
-                    :href="item.type !== 'transport' && !item.title.includes('機場') ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}` : 'javascript:void(0)'"
+                    :href="`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`"
                     target="_blank"
-                    :class="[
-                      'text-xs flex items-center gap-1 transition-colors py-1',
-                      item.type !== 'transport' && !item.title.includes('機場') ? 'text-okinawa-blue hover:text-okinawa-blue-dark cursor-pointer' : 'text-techo-ink/40 cursor-default'
-                    ]"
-                    @click.stop="item.type === 'transport' || item.title.includes('機場') ? $event.preventDefault() : null"
+                    class="text-xs flex items-center gap-1 transition-colors py-1 text-okinawa-blue hover:text-okinawa-blue-dark cursor-pointer"
                   >
                     <MapPin class="w-3.5 h-3.5" />
-                    <span :class="item.type !== 'transport' && !item.title.includes('機場') ? 'underline decoration-dotted underline-offset-2' : ''">
+                    <span class="underline decoration-dotted underline-offset-2">
                       {{ item.location }}
                     </span>
                   </a>
@@ -2010,56 +2051,56 @@ const countdown = computed(() => {
             <span>租車預約</span>
           </div>
           <div class="techo-card overflow-hidden">
-            <div class="p-4 bg-okinawa-blue/5 border-b border-techo-ink/5 flex items-center gap-4">
-              <div class="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-okinawa-blue shadow-sm">
-                <Car class="w-6 h-6" />
+            <div class="p-5 bg-okinawa-blue/5 border-b border-techo-ink/5 flex items-center gap-4">
+              <div class="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-okinawa-blue shadow-sm">
+                <Car class="w-8 h-8" />
               </div>
               <div>
-                <h3 class="font-bold">ORIX 租車公司</h3>
-                <p class="text-[10px] text-techo-ink/40 uppercase font-bold tracking-wider">X-TRAIL 同等級 (RD) | 禁煙車</p>
+                <h3 class="text-xl font-bold">ORIX 租車公司</h3>
+                <p class="text-sm text-techo-ink/40 uppercase font-bold tracking-wider">X-TRAIL 同等級 (RD) | 禁煙車</p>
               </div>
             </div>
             
-            <div class="p-4 space-y-4">
+            <div class="p-5 space-y-6">
               <div class="grid grid-cols-2 gap-4">
-                <div class="bg-techo-ink/5 p-3 rounded-2xl">
-                  <p class="text-[10px] font-bold text-techo-ink/40 uppercase mb-1">取車 (Pick-up)</p>
-                  <p class="text-sm font-bold">2026-09-27</p>
-                  <p class="text-xs text-techo-ink/60">08:00</p>
+                <div class="bg-techo-ink/5 p-4 rounded-2xl">
+                  <p class="text-sm font-bold text-techo-ink/40 uppercase mb-2">取車 (Pick-up)</p>
+                  <p class="text-lg font-bold">2026-09-27</p>
+                  <p class="text-base text-techo-ink/60">08:00</p>
                   <p 
-                    class="text-[10px] mt-2 text-okinawa-blue font-medium leading-tight flex items-center gap-1 cursor-pointer hover:underline"
+                    class="text-sm mt-3 text-okinawa-blue font-bold leading-tight flex items-center gap-1 cursor-pointer hover:underline"
                     @click="openMap('沖繩縣那霸市牧志2-17-10')"
                   >
-                    <MapPin class="w-3 h-3" />
+                    <MapPin class="w-4 h-4" />
                     美榮橋站前 外語櫃檯
                   </p>
                 </div>
-                <div class="bg-techo-ink/5 p-3 rounded-2xl">
-                  <p class="text-[10px] font-bold text-techo-ink/40 uppercase mb-1">還車 (Drop-off)</p>
-                  <p class="text-sm font-bold">2026-09-29</p>
-                  <p class="text-xs text-techo-ink/60">14:00</p>
+                <div class="bg-techo-ink/5 p-4 rounded-2xl">
+                  <p class="text-sm font-bold text-techo-ink/40 uppercase mb-2">還車 (Drop-off)</p>
+                  <p class="text-lg font-bold">2026-09-29</p>
+                  <p class="text-base text-techo-ink/60">14:00</p>
                   <p 
-                    class="text-[10px] mt-2 text-okinawa-blue font-medium leading-tight flex items-center gap-1 cursor-pointer hover:underline"
+                    class="text-sm mt-3 text-okinawa-blue font-bold leading-tight flex items-center gap-1 cursor-pointer hover:underline"
                     @click="openMap('沖繩縣豐見城市豐崎1-1174')"
                   >
-                    <MapPin class="w-3 h-3" />
+                    <MapPin class="w-4 h-4" />
                     那霸機場 外語櫃檯
                   </p>
                 </div>
               </div>
 
-              <div class="space-y-2 pt-2">
-                <div class="flex justify-between text-xs">
+              <div class="space-y-4 pt-2">
+                <div class="flex justify-between text-base">
                   <span class="text-techo-ink/40">租車方案</span>
-                  <span class="font-medium">安心方案 (RAP)</span>
+                  <span class="font-bold">安心方案 (RAP)</span>
                 </div>
-                <div class="flex justify-between text-xs">
+                <div class="flex justify-between text-base">
                   <span class="text-techo-ink/40">附加項目</span>
-                  <span class="font-medium">ETC 裝置</span>
+                  <span class="font-bold">ETC 裝置</span>
                 </div>
-                <div class="flex justify-between items-center pt-2 border-t border-techo-ink/5">
-                  <span class="text-xs font-bold">總費用</span>
-                  <span class="text-lg font-bold text-okinawa-blue">¥25,980</span>
+                <div class="flex justify-between items-center pt-4 border-t border-techo-ink/5">
+                  <span class="text-base font-bold">總費用</span>
+                  <span class="text-3xl font-bold text-okinawa-blue">¥25,980</span>
                 </div>
               </div>
             </div>
@@ -3118,14 +3159,14 @@ const countdown = computed(() => {
           <h2 class="text-2xl font-bold text-techo-ink">行前宣示</h2>
         </div>
 
-        <div class="bg-techo-ink/5 rounded-3xl p-6 mb-6 space-y-3">
-          <p class="text-sm font-bold text-okinawa-blue">1. 絕不表現不耐煩的態度</p>
-          <p class="text-sm font-bold text-okinawa-blue">2. 絕不對任何行程指手畫腳</p>
-          <p class="text-sm font-bold text-okinawa-blue">3. 絕不擅自消失</p>
-          <p class="text-sm font-bold text-okinawa-blue">4. 該花錢就花錢要省回家再省</p>
-          <p class="text-sm font-bold text-okinawa-blue">5. 該休息就休息累了就說</p>
-          <p class="text-sm font-bold text-okinawa-blue">6. 有臨時想逛、想看、想吃的絕對要說</p>
-          <p class="text-sm font-bold text-okinawa-blue">7. 開開心心出遊 平平安安回家</p>
+        <div class="bg-techo-ink/5 rounded-3xl p-6 mb-6 space-y-4">
+          <p class="text-lg font-bold text-okinawa-blue flex gap-3"><span>1.</span> <span>絕不表現不耐煩的態度</span></p>
+          <p class="text-lg font-bold text-okinawa-blue flex gap-3"><span>2.</span> <span>絕不對任何行程指手畫腳</span></p>
+          <p class="text-lg font-bold text-okinawa-blue flex gap-3"><span>3.</span> <span>絕不擅自消失</span></p>
+          <p class="text-lg font-bold text-okinawa-blue flex gap-3"><span>4.</span> <span>該花錢就花錢要省回家再省</span></p>
+          <p class="text-lg font-bold text-okinawa-blue flex gap-3"><span>5.</span> <span>該休息就休息累了就說</span></p>
+          <p class="text-lg font-bold text-okinawa-blue flex gap-3"><span>6.</span> <span>有想逛、想看、想吃的絕對要說</span></p>
+          <p class="text-lg font-bold text-okinawa-blue flex gap-3"><span>7.</span> <span>開開心心出遊 平平安安回家</span></p>
           
           <div class="pt-3 mt-3 border-t border-techo-ink/10 text-techo-ink/60 text-xs leading-relaxed space-y-1">
             <p>不管發生什麼事我都會聽從指示</p>
@@ -3159,5 +3200,6 @@ const countdown = computed(() => {
 body {
   background-image: radial-gradient(#7BBFEA11 1px, transparent 1px);
   background-size: 20px 20px;
+  background-color: var(--color-coral-white);
 }
 </style>
