@@ -754,7 +754,33 @@ const saveEditPlanning = async (item: any) => {
   editingPlanningId.value = null;
 };
 
+const swipedItemId = ref<string | null>(null);
+let touchStartX = 0;
+let touchCurrentX = 0;
+
+const handleTouchStart = (e: TouchEvent, id: string) => {
+  touchStartX = e.touches[0].clientX;
+  touchCurrentX = touchStartX;
+};
+
+const handleTouchMove = (e: TouchEvent) => {
+  touchCurrentX = e.touches[0].clientX;
+};
+
+const handleTouchEnd = (id: string) => {
+  const diff = touchCurrentX - touchStartX;
+  if (diff > 50) {
+    swipedItemId.value = id;
+  } else if (diff < -50) {
+    swipedItemId.value = null;
+  }
+};
+
 const togglePlanningItem = async (item: any) => {
+  if (swipedItemId.value === item.id) {
+    swipedItemId.value = null;
+    return;
+  }
   if (editingPlanningId.value === item.id) return;
   item.completed = !item.completed;
   
@@ -2580,51 +2606,57 @@ const countdownData = computed(() => {
             <div 
               v-for="item in items" 
               :key="item.id" 
-              class="techo-card p-4 flex items-center gap-4 group cursor-pointer"
-              @click="togglePlanningItem(item)"
+              class="relative overflow-hidden rounded-3xl"
             >
-              <div class="text-okinawa-blue">
-                <CheckCircle2 v-if="item.completed" class="w-6 h-6" />
-                <Circle v-else class="w-6 h-6 text-techo-ink/20" />
-              </div>
-              <div class="flex-grow">
-                <input 
-                  v-if="editingPlanningId === item.id"
-                  v-model="editingPlanningText"
-                  @click.stop
-                  @keyup.enter="saveEditPlanning(item)"
-                  @blur="saveEditPlanning(item)"
-                  class="w-full bg-techo-ink/5 p-1 rounded font-medium focus:outline-none"
-                  autoFocus
-                >
-                <p v-else :class="['font-medium transition-all', item.completed ? 'line-through text-techo-ink/30' : 'text-techo-ink']">
-                  {{ item.text }}
-                  <span v-if="item.completed && item.completedBy" class="ml-2 text-[10px] font-bold bg-okinawa-blue/10 text-okinawa-blue px-1.5 py-0.5 rounded-md no-underline inline-block">
-                    {{ item.completedBy }}
-                  </span>
-                </p>
-              </div>
-              <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <!-- Swipe Actions Layer -->
+              <div 
+                class="absolute inset-y-0 left-0 flex items-center gap-2 px-4 transition-all duration-300"
+                :class="swipedItemId === item.id ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-full'"
+              >
                 <button 
                   @click.stop="handleEditToggle(item)"
-                  :class="[
-                    'p-2 rounded-full transition-colors',
-                    editingPlanningId === item.id ? 'bg-okinawa-blue text-white' : 'text-okinawa-blue hover:bg-okinawa-blue/5'
-                  ]"
+                  class="p-3 bg-okinawa-blue text-white rounded-2xl shadow-lg active:scale-95"
                 >
-                  <Check v-if="editingPlanningId === item.id" class="w-4 h-4" />
-                  <Edit2 v-else class="w-4 h-4" />
+                  <Edit2 class="w-5 h-5" />
                 </button>
                 <button 
                   @click.stop="confirmDeletePlanning(item.id)"
-                  :class="[
-                    'px-2 py-1 rounded-full text-[10px] font-bold transition-all',
-                    confirmingDeleteId === item.id ? 'bg-red-500 text-white' : 'text-red-400 hover:bg-red-50'
-                  ]"
+                  class="p-3 bg-red-500 text-white rounded-2xl shadow-lg active:scale-95"
                 >
-                  <span v-if="confirmingDeleteId === item.id">確定？</span>
-                  <Trash2 v-else class="w-4 h-4" />
+                  <Trash2 class="w-5 h-5" />
                 </button>
+              </div>
+
+              <!-- Main Item Layer -->
+              <div 
+                class="techo-card p-4 flex items-center gap-4 group cursor-pointer transition-transform duration-300"
+                :class="swipedItemId === item.id ? 'translate-x-[110px]' : 'translate-x-0'"
+                @click="togglePlanningItem(item)"
+                @touchstart="handleTouchStart($event, item.id)"
+                @touchmove="handleTouchMove"
+                @touchend="handleTouchEnd(item.id)"
+              >
+                <div class="text-okinawa-blue">
+                  <CheckCircle2 v-if="item.completed" class="w-6 h-6" />
+                  <Circle v-else class="w-6 h-6 text-techo-ink/20" />
+                </div>
+                <div class="flex-grow">
+                  <input 
+                    v-if="editingPlanningId === item.id"
+                    v-model="editingPlanningText"
+                    @click.stop
+                    @keyup.enter="saveEditPlanning(item)"
+                    @blur="saveEditPlanning(item)"
+                    class="w-full bg-techo-ink/5 p-1 rounded font-medium focus:outline-none"
+                    autoFocus
+                  >
+                  <p v-else :class="['font-medium transition-all', item.completed ? 'line-through text-techo-ink/30' : 'text-techo-ink']">
+                    {{ item.text }}
+                    <span v-if="item.completed && item.completedBy" class="ml-2 text-[10px] font-bold bg-okinawa-blue/10 text-okinawa-blue px-1.5 py-0.5 rounded-md no-underline inline-block">
+                      {{ item.completedBy }}
+                    </span>
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -3238,13 +3270,13 @@ const countdownData = computed(() => {
         </div>
 
         <div class="bg-techo-ink/5 rounded-3xl p-6 mb-6 space-y-4">
-          <p class="text-lg font-bold text-okinawa-blue flex gap-3"><span>1.</span> <span>絕不表現不耐煩的態度</span></p>
-          <p class="text-lg font-bold text-okinawa-blue flex gap-3"><span>2.</span> <span>絕不對任何行程指手畫腳</span></p>
-          <p class="text-lg font-bold text-okinawa-blue flex gap-3"><span>3.</span> <span>絕不擅自消失</span></p>
-          <p class="text-lg font-bold text-okinawa-blue flex gap-3"><span>4.</span> <span>該花錢就花錢要省回家再省</span></p>
-          <p class="text-lg font-bold text-okinawa-blue flex gap-3"><span>5.</span> <span>該休息就休息累了就說</span></p>
-          <p class="text-lg font-bold text-okinawa-blue flex gap-3"><span>6.</span> <span>有想逛、想看、想吃的絕對要說</span></p>
-          <p class="text-lg font-bold text-okinawa-blue flex gap-3"><span>7.</span> <span>開開心心出遊 平平安安回家</span></p>
+          <p class="text-[17px] font-bold text-okinawa-blue flex gap-3"><span>1.</span> <span>絕不表現不耐煩的態度</span></p>
+          <p class="text-[17px] font-bold text-okinawa-blue flex gap-3"><span>2.</span> <span>絕不對任何行程指手畫腳</span></p>
+          <p class="text-[17px] font-bold text-okinawa-blue flex gap-3"><span>3.</span> <span>絕不擅自消失</span></p>
+          <p class="text-[17px] font-bold text-okinawa-blue flex gap-3"><span>4.</span> <span>該花錢就花錢要省回家再省</span></p>
+          <p class="text-[17px] font-bold text-okinawa-blue flex gap-3"><span>5.</span> <span>該休息就休息累了就說</span></p>
+          <p class="text-[17px] font-bold text-okinawa-blue flex gap-3"><span>6.</span> <span>有想逛、想看、想吃的絕對要說</span></p>
+          <p class="text-[17px] font-bold text-okinawa-blue flex gap-3"><span>7.</span> <span>開開心心出遊 平平安安回家</span></p>
           
           <div class="pt-3 mt-3 border-t border-techo-ink/10 text-techo-ink/60 text-xs leading-relaxed space-y-1">
             <p>不管發生什麼事我都會聽從指示</p>
