@@ -1,0 +1,21 @@
+{
+  "name": "沖繩旅遊2026",
+  "short_name": "沖繩2026",
+  "description": "2026 沖繩五日遊行程規劃與旅遊工具",
+  "start_url": "/okinawa-techo/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#7BBFEA",
+  "icons": [
+    {
+      "src": "https://picsum.photos/seed/okinawa/192/192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://picsum.photos/seed/okinawa/512/512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -5,13 +5,17 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
+    
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.email == 'asd5571227@gmail.com';
+    }
 
-    // Allow all authenticated users to read and write to shared trip data
-    // This is a family travel app, so we trust authenticated users for now.
-    // In a production app, you would restrict this to specific family members.
+    // Allow all authenticated users to read trip data
+    // Only allow admin (asd5571227@gmail.com) to write
     
     match /schedule/{itemId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
     
     match /expenses/{expenseId} {
@@ -23,15 +27,18 @@ service cloud.firestore {
     }
     
     match /hotels/{hotelId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     match /settings/{settingId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     match /vouchers/{voucherId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
     
     match /users/{userId} {

@@ -190,8 +190,6 @@ onMounted(() => {
 
 // Edit Mode Logic
 const isEditMode = ref(false);
-const showPasswordModal = ref(false);
-const passwordInput = ref('');
 const showEditItemModal = ref(false);
 const zoomedImageIndex = ref<number | null>(null);
 const zoomedSliderRef = ref<HTMLElement | null>(null);
@@ -445,16 +443,17 @@ const migrateAndSync = () => {
     hotels.value.push(h2);
     needsSave = true;
   } else {
-    // Force update to ensure UI reflects the latest code changes
-    h2.bookingId = defH2.bookingId;
-    h2.phone = defH2.phone;
-    h2.roomType = defH2.roomType;
-    h2.checkInTime = defH2.checkInTime;
-    h2.checkOutTime = defH2.checkOutTime;
-    h2.location = defH2.location;
-    h2.name = defH2.name;
-    h2.nameEn = defH2.nameEn;
-    needsSave = true;
+    // Update only if different to prevent unnecessary Firebase writes on every startup
+    let h2Changed = false;
+    if (h2.bookingId !== defH2.bookingId) { h2.bookingId = defH2.bookingId; h2Changed = true; }
+    if (h2.phone !== defH2.phone) { h2.phone = defH2.phone; h2Changed = true; }
+    if (h2.roomType !== defH2.roomType) { h2.roomType = defH2.roomType; h2Changed = true; }
+    if (h2.checkInTime !== defH2.checkInTime) { h2.checkInTime = defH2.checkInTime; h2Changed = true; }
+    if (h2.checkOutTime !== defH2.checkOutTime) { h2.checkOutTime = defH2.checkOutTime; h2Changed = true; }
+    if (h2.location !== defH2.location) { h2.location = defH2.location; h2Changed = true; }
+    if (h2.name !== defH2.name) { h2.name = defH2.name; h2Changed = true; }
+    if (h2.nameEn !== defH2.nameEn) { h2.nameEn = defH2.nameEn; h2Changed = true; }
+    if (h2Changed) needsSave = true;
   }
 
   // 3. Ensure h3 exists in the current state
@@ -479,11 +478,12 @@ const migrateAndSync = () => {
   hotels.value.forEach(h => {
     const def = defaultHotels.find(dh => dh.id === h.id);
     if (def) {
-      if (!h.name) h.name = def.name;
-      if (!h.nameEn) h.nameEn = def.nameEn;
-      if (!h.mapUrl) h.mapUrl = def.mapUrl;
-      if (!h.roomType) h.roomType = def.roomType;
-      needsSave = true;
+      let changed = false;
+      if (!h.name) { h.name = def.name; changed = true; }
+      if (!h.nameEn) { h.nameEn = def.nameEn; changed = true; }
+      if (!h.mapUrl) { h.mapUrl = def.mapUrl; changed = true; }
+      if (!h.roomType) { h.roomType = def.roomType; changed = true; }
+      if (changed) needsSave = true;
     }
   });
 
@@ -963,12 +963,19 @@ const handleEsimUpload = async (event: Event, index: number) => {
   if (target.files && target.files[0]) {
     const reader = new FileReader();
     reader.onload = async (e) => {
-      const result = e.target?.result as string;
-      esims.value[index] = result;
-      localStorage.setItem('okinawa_esims', JSON.stringify(esims.value));
-      
-      // Sync to Firebase
-      await syncToFirebase('vouchers', 'esims', { images: esims.value });
+      const rawResult = e.target?.result as string;
+      try {
+        const compressedResult = await compressImage(rawResult);
+        esims.value[index] = compressedResult;
+        localStorage.setItem('okinawa_esims', JSON.stringify(esims.value));
+        
+        // Sync to Firebase
+        await syncToFirebase('vouchers', 'esims', { images: esims.value });
+        showToast('eSIM 憑證上傳成功', 'success');
+      } catch (err) {
+        console.error('eSIM upload failed:', err);
+        showToast('上傳失敗，圖片可能太大', 'error');
+      }
     };
     reader.readAsDataURL(target.files[0]);
   }
@@ -1089,18 +1096,16 @@ const resetDeclaration = () => {
 const toggleEditMode = () => {
   if (isEditMode.value) {
     isEditMode.value = false;
+    // Sync titles to cloud only when saving/exiting edit mode
+    if (userId.value) {
+      syncToFirebase('settings', 'app', { mainTitle: mainTitle.value, subTitle: subTitle.value });
+    }
   } else {
-    showPasswordModal.value = true;
-    passwordInput.value = '';
-  }
-};
-
-const verifyPassword = () => {
-  if (passwordInput.value === '0619') {
-    isEditMode.value = true;
-    showPasswordModal.value = false;
-  } else {
-    alert('密碼錯誤！');
+    if (auth.currentUser?.email === 'asd5571227@gmail.com') {
+      isEditMode.value = true;
+    } else {
+      showToast('您沒有編輯權限！只有管理員可以編輯。', 'error');
+    }
   }
 };
 
@@ -1253,6 +1258,7 @@ const allScheduleItems = reactive<Record<string, any[]>>(savedSchedule ? JSON.pa
 
 const isAuthReady = ref(false);
 const userId = ref<string | null>(null);
+let quotaExhaustedToastShown = false;
 
 // Firebase Sync Logic
 const syncToFirebase = async (collectionName: string, id: string, data: any) => {
@@ -1278,8 +1284,17 @@ const syncToFirebase = async (collectionName: string, id: string, data: any) => 
       updatedAt: new Date().toISOString(),
       updatedBy: userId.value
     });
-  } catch (error) {
-    console.error(`Failed to sync to ${collectionName}:`, error);
+  } catch (error: any) {
+    if (error.code === 'resource-exhausted') {
+      console.error('Firestore 寫入配額已用盡。請稍後再試或等到明天重置。');
+      // Only show toast once to avoid spamming
+      if (!quotaExhaustedToastShown) {
+        showToast('雲端同步配額已達上限，目前僅能儲存在本地端。', 'error');
+        quotaExhaustedToastShown = true;
+      }
+    } else {
+      console.error(`Failed to sync to ${collectionName}:`, error);
+    }
   }
 };
 
@@ -1304,10 +1319,11 @@ onMounted(async () => {
       isAuthReady.value = true;
       migrateAndSync();
       setupRealtimeListeners();
-      // Auto sync all local data to cloud on login (silent)
-      forceSyncAllToFirebase(true);
+      // Realtime listeners will automatically fetch cloud data and update local state.
+      // We no longer force sync local data to cloud on startup to save write quota.
     } else {
       isAuthReady.value = false;
+      userId.value = null;
     }
   });
 });
@@ -1467,14 +1483,24 @@ watch(allScheduleItems, (newVal) => {
   localStorage.setItem('okinawa_schedule', JSON.stringify(newVal));
 }, { deep: true });
 
+watch(expenses, (newVal) => {
+  localStorage.setItem('okinawa_expenses', JSON.stringify(newVal));
+}, { deep: true });
+
+watch(planningData, (newVal) => {
+  localStorage.setItem('okinawa_planning', JSON.stringify(newVal));
+}, { deep: true });
+
+watch(esims, (newVal) => {
+  localStorage.setItem('okinawa_esims', JSON.stringify(newVal));
+}, { deep: true });
+
 watch(mainTitle, (newVal) => {
   localStorage.setItem('okinawa_main_title', newVal);
-  syncToFirebase('settings', 'app', { mainTitle: newVal, subTitle: subTitle.value });
 });
 
 watch(subTitle, (newVal) => {
   localStorage.setItem('okinawa_sub_title', newVal);
-  syncToFirebase('settings', 'app', { mainTitle: mainTitle.value, subTitle: newVal });
 });
 
 watch(hotels, (newVal) => {
@@ -2707,28 +2733,30 @@ const countdown = computed(() => {
     </transition>
 
     <!-- Bottom Navigation -->
-    <nav class="fixed bottom-6 left-6 right-6 bg-white/80 backdrop-blur-lg rounded-full shadow-2xl border border-white/20 p-2 flex justify-between items-center z-50">
-      <div class="flex gap-1">
-        <button 
-          v-for="view in views" 
-          :key="view.id"
-          @click="currentView = view.id"
-          :class="[
-            'flex flex-col items-center justify-center w-12 h-12 rounded-full transition-all',
-            currentView === view.id ? 'bg-okinawa-blue text-white shadow-lg' : 'text-techo-ink/40 hover:bg-techo-ink/5'
-          ]"
-        >
-          <component :is="view.icon" class="w-5 h-5" />
-          <span class="text-[10px] mt-0.5 font-bold" v-if="currentView === view.id">{{ view.label }}</span>
-        </button>
-      </div>
+    <nav class="fixed bottom-6 left-6 right-6 bg-white/80 backdrop-blur-lg rounded-full shadow-2xl border border-white/20 p-2 grid grid-cols-6 gap-1 z-50">
+      <button 
+        v-for="view in views" 
+        :key="view.id"
+        @click="currentView = view.id"
+        :class="[
+          'flex flex-col items-center justify-center h-12 rounded-full transition-all',
+          currentView === view.id ? 'bg-okinawa-blue text-white shadow-lg' : 'text-techo-ink/40 hover:bg-techo-ink/5'
+        ]"
+      >
+        <component :is="view.icon" class="w-5 h-5" />
+        <span class="text-[10px] mt-0.5 font-bold" v-if="currentView === view.id">{{ view.label }}</span>
+      </button>
 
-      <!-- Edit Button moved here -->
+      <!-- Unified Edit Button -->
       <button 
         @click="toggleEditMode"
-        :class="['w-10 h-10 rounded-full transition-all flex items-center justify-center shadow-sm active:scale-90', isEditMode ? 'bg-okinawa-blue text-white shadow-lg ring-2 ring-okinawa-blue/20' : 'bg-techo-ink/5 text-techo-ink/40 hover:bg-techo-ink/10']"
+        :class="[
+          'flex flex-col items-center justify-center h-12 rounded-full transition-all',
+          isEditMode ? 'bg-okinawa-blue text-white shadow-lg' : 'text-techo-ink/40 hover:bg-techo-ink/5'
+        ]"
       >
-        <Edit2 class="w-4 h-4" />
+        <Edit2 class="w-5 h-5" />
+        <span class="text-[10px] mt-0.5 font-bold" v-if="isEditMode">編輯</span>
       </button>
     </nav>
 
@@ -2753,26 +2781,6 @@ const countdown = computed(() => {
         <span class="text-sm font-bold">{{ toast.message }}</span>
       </div>
     </transition>
-
-    <!-- Password Modal -->
-    <div v-if="showPasswordModal" class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/20 backdrop-blur-sm">
-      <div class="bg-white w-full max-w-xs rounded-3xl p-8 shadow-2xl">
-        <h2 class="text-xl font-bold text-techo-ink mb-6 text-center">請輸入編輯密碼</h2>
-        <input 
-          v-model="passwordInput" 
-          type="password" 
-          inputmode="numeric"
-          pattern="[0-9]*"
-          class="w-full p-4 bg-techo-ink/5 rounded-2xl mb-6 text-center text-2xl tracking-widest focus:outline-none focus:ring-2 focus:ring-okinawa-blue"
-          placeholder="••••"
-          @keyup.enter="verifyPassword"
-        >
-        <div class="flex gap-3">
-          <button @click="showPasswordModal = false" class="flex-grow py-3 text-techo-ink/40 font-bold">取消</button>
-          <button @click="verifyPassword" class="flex-grow py-3 bg-okinawa-blue text-white rounded-xl font-bold">確認</button>
-        </div>
-      </div>
-    </div>
 
     <div v-if="showEditItemModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/20 backdrop-blur-sm">
       <div class="bg-white w-full max-w-md rounded-t-[40px] sm:rounded-[40px] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
