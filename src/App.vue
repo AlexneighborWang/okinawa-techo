@@ -72,6 +72,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from 'firebase/auth';
+import { APP_ICON } from './assets';
 
 // Views
 const currentView = ref('schedule');
@@ -1633,8 +1634,9 @@ const countdownData = computed(() => {
     <!-- Login Overlay -->
     <div v-if="!userId" class="fixed inset-0 z-[300] bg-okinawa-blue/10 backdrop-blur-xl flex items-center justify-center p-6">
       <div class="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl text-center animate-in zoom-in duration-300">
-        <div class="w-20 h-20 bg-okinawa-blue/10 rounded-full flex items-center justify-center mx-auto mb-6">
-          <Lock class="w-10 h-10 text-okinawa-blue" />
+        <div class="w-24 h-24 bg-okinawa-blue/10 rounded-full flex items-center justify-center mx-auto mb-6 overflow-hidden">
+          <img v-if="APP_ICON" :src="APP_ICON" class="w-full h-full object-cover" />
+          <Lock v-else class="w-10 h-10 text-okinawa-blue" />
         </div>
         <h2 class="text-2xl font-bold text-techo-ink mb-2">歡迎使用沖繩手帖</h2>
         <p class="text-techo-ink/60 mb-8">為了同步全家人的行程與記帳，請先登入您的 Google 帳號。</p>
