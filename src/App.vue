@@ -2572,6 +2572,16 @@ const countdownData = computed(() => {
       <div v-if="currentView === 'tools'" class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
         <!-- Main Tools Menu -->
         <div v-if="toolSubView === 'main'" class="space-y-4">
+          <!-- Google Maps List Button -->
+          <a 
+            href="https://maps.app.goo.gl/avALVgvqvztEzZNL8" 
+            target="_blank"
+            class="flex items-center justify-center gap-3 w-full py-4 bg-emerald-green text-white rounded-2xl font-bold shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform"
+          >
+            <MapPin class="w-5 h-5" />
+            打開我的口袋名單
+          </a>
+
           <!-- Google Translate Button -->
           <a 
             href="https://translate.google.com/?sl=zh-TW&tl=ja&op=translate" 
