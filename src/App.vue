@@ -1618,7 +1618,7 @@ const countdown = computed(() => {
           </div>
         </div>
         <div v-else>
-          <h1 class="text-4xl font-bold text-okinawa-blue-dark leading-tight">{{ mainTitle }}</h1>
+          <h1 class="text-3xl font-bold text-okinawa-blue-dark leading-tight">{{ mainTitle }}</h1>
           <p class="text-xl font-medium text-techo-ink/40 flex items-center gap-2 mt-3">
             <Plane class="w-6 h-6" /> {{ subTitle }}
           </p>
