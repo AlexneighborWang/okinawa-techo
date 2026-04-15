@@ -1336,6 +1336,20 @@ const deleteFromFirebase = async (collectionName: string, id: string) => {
 };
 
 onMounted(async () => {
+  // Set dynamic favicon
+  if (APP_ICON) {
+    const link = document.querySelector("link[rel*='icon']") || document.createElement('link');
+    (link as HTMLLinkElement).type = 'image/jpeg';
+    (link as HTMLLinkElement).rel = 'shortcut icon';
+    (link as HTMLLinkElement).href = APP_ICON;
+    document.getElementsByTagName('head')[0].appendChild(link);
+
+    const appleLink = document.querySelector("link[rel*='apple-touch-icon']") || document.createElement('link');
+    (appleLink as HTMLLinkElement).rel = 'apple-touch-icon';
+    (appleLink as HTMLLinkElement).href = APP_ICON;
+    document.getElementsByTagName('head')[0].appendChild(appleLink);
+  }
+
   // Initialize Auth
   onAuthStateChanged(auth, (user) => {
     if (user) {
