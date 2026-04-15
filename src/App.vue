@@ -478,6 +478,8 @@ const migrateAndSync = () => {
     const def = defaultHotels.find(dh => dh.id === h.id);
     if (def) {
       let changed = false;
+      // Only update if the current value is missing or matches an OLD default value we want to upgrade
+      // This prevents overwriting user-customized names/details
       if (!h.name) { h.name = def.name; changed = true; }
       if (!h.nameEn) { h.nameEn = def.nameEn; changed = true; }
       if (!h.mapUrl) { h.mapUrl = def.mapUrl; changed = true; }
@@ -491,6 +493,8 @@ const migrateAndSync = () => {
     // If logged in, sync the corrected data to Firebase
     if (userId.value) {
       hotels.value.forEach(h => {
+        // Only sync if it was actually modified in this migration
+        // For simplicity, we sync all for now but we could optimize further
         syncToFirebase('hotels', h.id, h);
       });
     }
@@ -1258,38 +1262,54 @@ const allScheduleItems = reactive<Record<string, any[]>>(savedSchedule ? JSON.pa
 const isAuthReady = ref(false);
 const userId = ref<string | null>(null);
 let quotaExhaustedToastShown = false;
+let isMigrationDone = false;
+let unsubscribes: (() => void)[] = [];
+const syncCache: Record<string, string> = {};
 
 // Firebase Sync Logic
+const updateSyncCache = (collectionName: string, id: string, data: any) => {
+  const cleanData = JSON.parse(JSON.stringify(data));
+  // Remove metadata fields that are added during sync to ensure comparison matches
+  delete cleanData.updatedAt;
+  delete cleanData.updatedBy;
+  syncCache[`${collectionName}_${id}`] = JSON.stringify(cleanData);
+};
+
 const syncToFirebase = async (collectionName: string, id: string, data: any) => {
   if (!userId.value) return;
   if (!id || typeof id !== 'string' || id.includes('/')) {
     console.warn(`Invalid ID for sync to ${collectionName}:`, id);
-    if (id && id.includes('/')) {
-      showToast(`資料 ID 包含非法字元 (/)，已跳過同步: ${id}`, 'error');
-    }
     return;
   }
   try {
+    // Clean data of undefined fields (Firestore doesn't support them)
+    const cleanData = JSON.parse(JSON.stringify(data));
+    
+    // Cache check to prevent redundant writes
+    const cacheKey = `${collectionName}_${id}`;
+    const dataStr = JSON.stringify(cleanData);
+    if (syncCache[cacheKey] === dataStr) {
+      return; // Data hasn't changed, skip sync
+    }
+
     // Check data size (rough estimate)
-    const dataStr = JSON.stringify(data);
     const sizeInBytes = new Blob([dataStr]).size;
     if (sizeInBytes > 1000000) {
       showToast(`資料過大 (${(sizeInBytes / 1024 / 1024).toFixed(2)}MB)，無法同步到雲端。請減少圖片數量。`, 'error');
       return;
     }
 
-    // Clean data of undefined fields (Firestore doesn't support them)
-    const cleanData = JSON.parse(JSON.stringify(data));
-
     await setDoc(doc(db, collectionName, id), {
       ...cleanData,
       updatedAt: new Date().toISOString(),
       updatedBy: userId.value
     });
+    
+    // Update cache after successful sync
+    syncCache[cacheKey] = dataStr;
   } catch (error: any) {
     if (error.code === 'resource-exhausted') {
-      console.error('Firestore 寫入配額已用盡。請稍後再試或等到明天重置。');
-      // Only show toast once to avoid spamming
+      console.error('Firestore 寫入配額已用盡。');
       if (!quotaExhaustedToastShown) {
         showToast('雲端同步配額已達上限，目前僅能儲存在本地端。', 'error');
         quotaExhaustedToastShown = true;
@@ -1308,6 +1328,7 @@ const deleteFromFirebase = async (collectionName: string, id: string) => {
   }
   try {
     await deleteDoc(doc(db, collectionName, id));
+    delete syncCache[`${collectionName}_${id}`];
   } catch (error) {
     console.error(`Failed to delete from ${collectionName}:`, error);
   }
@@ -1317,15 +1338,25 @@ onMounted(async () => {
   // Initialize Auth
   onAuthStateChanged(auth, (user) => {
     if (user) {
+      const isFirstAuth = !userId.value;
       userId.value = user.uid;
       isAuthReady.value = true;
-      migrateAndSync();
-      setupRealtimeListeners();
-      // Realtime listeners will automatically fetch cloud data and update local state.
-      // We no longer force sync local data to cloud on startup to save write quota.
+      
+      if (isFirstAuth) {
+        if (!isMigrationDone) {
+          migrateAndSync();
+          isMigrationDone = true;
+        }
+        setupRealtimeListeners();
+      }
     } else {
       isAuthReady.value = false;
       userId.value = null;
+      // Clear listeners on logout
+      unsubscribes.forEach(unsub => unsub());
+      unsubscribes = [];
+      // Clear sync cache on logout to prevent data leakage/inconsistency
+      Object.keys(syncCache).forEach(key => delete syncCache[key]);
     }
   });
 });
@@ -1341,8 +1372,6 @@ const loginWithGoogle = async () => {
   }
 };
 
-let unsubscribes: (() => void)[] = [];
-
 const isSyncing = reactive({
   schedule: false,
   expenses: false,
@@ -1351,7 +1380,7 @@ const isSyncing = reactive({
 });
 
 const setupRealtimeListeners = () => {
-  // Clear existing listeners
+  // 1. Clear existing listeners
   unsubscribes.forEach(unsub => unsub());
   unsubscribes = [];
 
@@ -1364,6 +1393,7 @@ const setupRealtimeListeners = () => {
   const settingsUnsub = onSnapshot(doc(db, 'settings', 'app'), (snapshot) => {
     if (snapshot.exists()) {
       const data = snapshot.data();
+      updateSyncCache('settings', 'app', data);
       if (data.mainTitle) mainTitle.value = data.mainTitle;
       if (data.subTitle) subTitle.value = data.subTitle;
     }
@@ -1374,6 +1404,7 @@ const setupRealtimeListeners = () => {
   const vouchersUnsub = onSnapshot(doc(db, 'vouchers', 'esims'), (snapshot) => {
     if (snapshot.exists()) {
       const data = snapshot.data();
+      updateSyncCache('vouchers', 'esims', data);
       if (data.images) esims.value = data.images;
     }
   });
@@ -1384,6 +1415,7 @@ const setupRealtimeListeners = () => {
     isSyncing.schedule = false;
     snapshot.docChanges().forEach((change) => {
       const data = change.doc.data();
+      updateSyncCache('schedule', change.doc.id, data);
       const day = data.day;
       if (!day) return; // Safety check
       
@@ -1410,6 +1442,7 @@ const setupRealtimeListeners = () => {
     isSyncing.expenses = false;
     snapshot.docChanges().forEach((change) => {
       const data = change.doc.data();
+      updateSyncCache('expenses', change.doc.id, data);
       if (change.type === 'added' || change.type === 'modified') {
         const index = expenses.value.findIndex(e => String(e.id) === String(change.doc.id));
         const newExpense = { ...data, id: change.doc.id };
@@ -1430,6 +1463,7 @@ const setupRealtimeListeners = () => {
     isSyncing.planning = false;
     snapshot.docChanges().forEach((change) => {
       const data = change.doc.data();
+      updateSyncCache('planning', change.doc.id, data);
       const tab = data.tab;
       if (!tab || !planningData.value[tab]) return; // Safety check
       
@@ -1451,10 +1485,9 @@ const setupRealtimeListeners = () => {
   // 4. Hotels Sync
   const hotelsUnsub = onSnapshot(collection(db, 'hotels'), (snapshot) => {
     isSyncing.hotels = false;
-    console.log('Hotels snapshot received, docs:', snapshot.size);
     snapshot.docChanges().forEach((change) => {
       const data = change.doc.data();
-      console.log(`Hotel ${change.type}:`, change.doc.id, data.name);
+      updateSyncCache('hotels', change.doc.id, data);
       if (change.type === 'added' || change.type === 'modified') {
         const index = hotels.value.findIndex(h => h.id === change.doc.id);
         const newHotel = { ...data, id: change.doc.id } as HotelInfo;
