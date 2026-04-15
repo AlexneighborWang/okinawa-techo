@@ -1618,21 +1618,21 @@ const countdown = computed(() => {
           </div>
         </div>
         <div v-else>
-          <h1 class="text-3xl font-bold text-okinawa-blue-dark leading-tight">{{ mainTitle }}</h1>
-          <p class="text-lg font-medium text-techo-ink/40 flex items-center gap-2 mt-2">
-            <Plane class="w-5 h-5" /> {{ subTitle }}
+          <h1 class="text-4xl font-bold text-okinawa-blue-dark leading-tight">{{ mainTitle }}</h1>
+          <p class="text-xl font-medium text-techo-ink/40 flex items-center gap-2 mt-3">
+            <Plane class="w-6 h-6" /> {{ subTitle }}
           </p>
           
-          <div class="flex items-center gap-3 mt-6">
+          <div class="flex items-center gap-3 mt-8">
             <button 
               @click="showDeclarationModal = true"
-              class="text-xs font-bold text-okinawa-blue bg-okinawa-blue/5 px-4 py-2.5 rounded-xl hover:bg-okinawa-blue/10 flex items-center gap-2 transition-all border border-okinawa-blue/10 shadow-sm active:scale-95"
+              class="text-sm font-bold text-okinawa-blue bg-okinawa-blue/5 px-5 py-3 rounded-xl hover:bg-okinawa-blue/10 flex items-center gap-2 transition-all border border-okinawa-blue/10 shadow-sm active:scale-95"
             >
-              <CheckCircle2 class="w-4 h-4" />
+              <CheckCircle2 class="w-5 h-5" />
               <span>行前宣示</span>
             </button>
-            <div v-if="countdown > 0" class="flex items-center gap-2 text-xs font-bold text-orange-500 bg-orange-50 px-4 py-2.5 rounded-xl border border-orange-100 shadow-sm">
-              <Clock class="w-4 h-4" />
+            <div v-if="countdown > 0" class="flex items-center gap-2 text-sm font-bold text-orange-500 bg-orange-50 px-5 py-3 rounded-xl border border-orange-100 shadow-sm">
+              <Clock class="w-5 h-5" />
               <span>出發倒數 {{ countdown }} 天</span>
             </div>
           </div>
@@ -1664,22 +1664,22 @@ const countdown = computed(() => {
 
         <!-- Weather Card -->
         <div class="techo-card p-5 bg-gradient-to-br from-white to-okinawa-blue/5">
-          <div class="flex justify-between items-center mb-4">
-            <div class="flex gap-2">
+          <div class="flex flex-col gap-4 mb-4">
+            <div class="flex w-full p-1 bg-techo-ink/5 rounded-xl">
               <button 
                 v-for="loc in locations" 
                 :key="loc"
                 @click="handleLocationChange(loc)"
                 :class="[
-                  'px-3 py-1 rounded-full text-xs font-bold transition-all',
-                  weatherLocation === loc ? 'bg-okinawa-blue text-white shadow-sm' : 'bg-techo-ink/5 text-techo-ink/40'
+                  'flex-grow py-2 rounded-lg text-sm font-bold transition-all',
+                  weatherLocation === loc ? 'bg-white text-okinawa-blue shadow-sm' : 'text-techo-ink/40'
                 ]"
               >
                 {{ loc }}
               </button>
             </div>
-            <div v-if="isFetchingWeather" class="animate-spin text-okinawa-blue">
-              <RefreshCw class="w-4 h-4" />
+            <div v-if="isFetchingWeather" class="flex justify-center animate-spin text-okinawa-blue">
+              <RefreshCw class="w-5 h-5" />
             </div>
           </div>
 
@@ -2739,24 +2739,24 @@ const countdown = computed(() => {
         :key="view.id"
         @click="currentView = view.id"
         :class="[
-          'flex flex-col items-center justify-center h-12 rounded-full transition-all',
+          'flex flex-col items-center justify-center h-14 rounded-full transition-all',
           currentView === view.id ? 'bg-okinawa-blue text-white shadow-lg' : 'text-techo-ink/40 hover:bg-techo-ink/5'
         ]"
       >
-        <component :is="view.icon" class="w-5 h-5" />
-        <span class="text-[10px] mt-0.5 font-bold" v-if="currentView === view.id">{{ view.label }}</span>
+        <component :is="view.icon" class="w-6 h-6" />
+        <span class="text-[11px] mt-1 font-bold" v-if="currentView === view.id">{{ view.label }}</span>
       </button>
 
       <!-- Unified Edit Button -->
       <button 
         @click="toggleEditMode"
         :class="[
-          'flex flex-col items-center justify-center h-12 rounded-full transition-all',
+          'flex flex-col items-center justify-center h-14 rounded-full transition-all',
           isEditMode ? 'bg-okinawa-blue text-white shadow-lg' : 'text-techo-ink/40 hover:bg-techo-ink/5'
         ]"
       >
-        <Edit2 class="w-5 h-5" />
-        <span class="text-[10px] mt-0.5 font-bold" v-if="isEditMode">編輯</span>
+        <Edit2 class="w-6 h-6" />
+        <span class="text-[11px] mt-1 font-bold" v-if="isEditMode">編輯</span>
       </button>
     </nav>
 
