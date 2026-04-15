@@ -1261,6 +1261,7 @@ const savedSchedule = localStorage.getItem('okinawa_schedule');
 const allScheduleItems = reactive<Record<string, any[]>>(savedSchedule ? JSON.parse(savedSchedule) : defaultScheduleItems);
 
 const isAuthReady = ref(false);
+const isLoggingIn = ref(false);
 const userId = ref<string | null>(null);
 let quotaExhaustedToastShown = false;
 let isMigrationDone = false;
@@ -1377,13 +1378,24 @@ onMounted(async () => {
 });
 
 const loginWithGoogle = async () => {
+  if (isLoggingIn.value) return;
+  
+  isLoggingIn.value = true;
   const provider = new GoogleAuthProvider();
   try {
     await signInWithPopup(auth, provider);
     showToast('登入成功', 'success');
-  } catch (error) {
+  } catch (error: any) {
     console.error("Login failed:", error);
-    showToast('登入失敗', 'error');
+    if (error.code === 'auth/popup-blocked') {
+      showToast('登入視窗被瀏覽器攔截，請允許彈出視窗後再試一次。', 'error');
+    } else if (error.code === 'auth/popup-closed-by-user') {
+      // User closed the popup, no need for error message
+    } else {
+      showToast('登入失敗，請稍後再試。', 'error');
+    }
+  } finally {
+    isLoggingIn.value = false;
   }
 };
 
@@ -1656,10 +1668,17 @@ const countdownData = computed(() => {
         <p class="text-techo-ink/60 mb-8">為了同步全家人的行程與記帳，請先登入您的 Google 帳號。</p>
         <button 
           @click="loginWithGoogle"
-          class="w-full bg-white border-2 border-techo-ink/10 py-4 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-techo-ink/5 transition-colors shadow-sm"
+          :disabled="isLoggingIn"
+          class="w-full bg-white border-2 border-techo-ink/10 py-4 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-techo-ink/5 transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5" />
-          使用 Google 登入
+          <template v-if="isLoggingIn">
+            <RefreshCw class="w-5 h-5 animate-spin text-okinawa-blue" />
+            <span>登入中...</span>
+          </template>
+          <template v-else>
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5" />
+            <span>使用 Google 登入</span>
+          </template>
         </button>
         <p class="text-[10px] text-techo-ink/40 mt-6 uppercase tracking-widest">Securely powered by Firebase</p>
       </div>
