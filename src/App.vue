@@ -2174,7 +2174,7 @@ const countdownData = computed(() => {
             <div class="p-5 space-y-6">
               <div class="grid grid-cols-2 gap-4">
                 <div class="bg-techo-ink/5 p-4 rounded-2xl">
-                  <p class="text-sm font-bold text-techo-ink/40 uppercase mb-2">取車 (Pick-up)</p>
+                  <p class="text-sm font-bold text-techo-ink/40 uppercase mb-2">取車</p>
                   <p class="text-lg font-bold">2026-09-27</p>
                   <p class="text-base text-techo-ink/60">08:00</p>
                   <a 
@@ -2187,7 +2187,7 @@ const countdownData = computed(() => {
                   </a>
                 </div>
                 <div class="bg-techo-ink/5 p-4 rounded-2xl">
-                  <p class="text-sm font-bold text-techo-ink/40 uppercase mb-2">還車 (Drop-off)</p>
+                  <p class="text-sm font-bold text-techo-ink/40 uppercase mb-2">還車</p>
                   <p class="text-lg font-bold">2026-09-29</p>
                   <p class="text-base text-techo-ink/60">14:00</p>
                   <a 
@@ -2441,6 +2441,7 @@ const countdownData = computed(() => {
                 <input 
                   v-model.number="expenseForm.amount" 
                   type="number" 
+                  inputmode="decimal"
                   class="w-full p-4 bg-techo-ink/5 rounded-2xl font-bold text-xl focus:outline-none focus:ring-2 focus:ring-okinawa-blue"
                   placeholder="0"
                 >
@@ -2831,6 +2832,8 @@ const countdownData = computed(() => {
                 <input 
                   v-model="toolJpyAmount"
                   type="number" 
+                  inputmode="numeric"
+                  pattern="[0-9]*"
                   placeholder="輸入金額"
                   class="w-full p-3 bg-white border border-techo-ink/10 rounded-xl text-center font-bold focus:outline-none focus:ring-2 focus:ring-okinawa-blue"
                 >
