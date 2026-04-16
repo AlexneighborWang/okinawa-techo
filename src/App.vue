@@ -1923,16 +1923,16 @@ const countdownData = computed(() => {
 
                   <!-- Edit Controls -->
                   <div v-if="isEditMode" class="flex items-center gap-2 flex-shrink-0">
-                    <button @click="moveItem(index, 'up')" class="p-1.5 bg-techo-ink/5 rounded-lg text-techo-ink/40 hover:text-okinawa-blue">
+                    <button @click="moveItem(index, 'up')" class="p-1.5 bg-techo-ink/5 rounded-lg text-techo-ink/40 hover:text-okinawa-blue touch-manipulation">
                       <ChevronUp class="w-4 h-4" />
                     </button>
-                    <button @click="moveItem(index, 'down')" class="p-1.5 bg-techo-ink/5 rounded-lg text-techo-ink/40 hover:text-okinawa-blue">
+                    <button @click="moveItem(index, 'down')" class="p-1.5 bg-techo-ink/5 rounded-lg text-techo-ink/40 hover:text-okinawa-blue touch-manipulation">
                       <ChevronDown class="w-4 h-4" />
                     </button>
-                    <button @click="editItem(item, index)" class="p-1.5 bg-okinawa-blue/10 rounded-lg text-okinawa-blue">
+                    <button @click="editItem(item, index)" class="p-1.5 bg-okinawa-blue/10 rounded-lg text-okinawa-blue touch-manipulation">
                       <Edit2 class="w-4 h-4" />
                     </button>
-                    <button @click="deleteItem(index)" class="p-1.5 bg-red-50 rounded-lg text-red-500">
+                    <button @click="deleteItem(index)" class="p-1.5 bg-red-50 rounded-lg text-red-500 touch-manipulation">
                       <Trash2 class="w-4 h-4" />
                     </button>
                   </div>
@@ -2560,18 +2560,20 @@ const countdownData = computed(() => {
             <div v-for="expense in group.items" :key="expense.id" class="relative overflow-hidden rounded-3xl">
               <!-- Swipe Actions Layer -->
               <div 
-                class="absolute inset-y-0 right-0 flex items-center gap-2 px-4 transition-all duration-300"
-                :class="swipedExpenseId === expense.id ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-full'"
+                class="absolute inset-y-0 right-0 flex items-center gap-2 px-4 transition-all duration-200 z-10"
+                :class="swipedExpenseId === expense.id ? 'opacity-100 translate-x-0 pointer-events-auto' : 'opacity-0 translate-x-full pointer-events-none'"
               >
                 <button 
                   @click.stop="editExpense(expense)"
-                  class="p-3 bg-okinawa-blue text-white rounded-2xl shadow-lg active:scale-95"
+                  @touchstart.stop
+                  class="p-3 bg-okinawa-blue text-white rounded-2xl shadow-lg active:scale-95 touch-manipulation"
                 >
                   <Edit2 class="w-5 h-5" />
                 </button>
                 <button 
                   @click.stop="deleteExpense(expense.id)"
-                  class="p-3 bg-red-500 text-white rounded-2xl shadow-lg active:scale-95"
+                  @touchstart.stop
+                  class="p-3 bg-red-500 text-white rounded-2xl shadow-lg active:scale-95 touch-manipulation"
                 >
                   <Trash2 class="w-5 h-5" />
                 </button>
@@ -2579,7 +2581,7 @@ const countdownData = computed(() => {
 
               <!-- Main Item Layer -->
               <div 
-                class="techo-card p-4 flex justify-between items-center transition-transform duration-300"
+                class="techo-card p-4 flex justify-between items-center transition-transform duration-300 relative z-20"
                 :class="swipedExpenseId === expense.id ? '-translate-x-[140px]' : 'translate-x-0'"
                 @click="swipedExpenseId ? swipedExpenseId = null : null"
                 @touchstart="handleTouchStart($event, expense.id, 'expense')"
@@ -2721,18 +2723,20 @@ const countdownData = computed(() => {
             >
               <!-- Swipe Actions Layer -->
               <div 
-                class="absolute inset-y-0 right-0 flex items-center gap-2 px-4 transition-all duration-300"
-                :class="swipedItemId === item.id ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-full'"
+                class="absolute inset-y-0 right-0 flex items-center gap-2 px-4 transition-all duration-200 z-10"
+                :class="swipedItemId === item.id ? 'opacity-100 translate-x-0 pointer-events-auto' : 'opacity-0 translate-x-full pointer-events-none'"
               >
                 <button 
                   @click.stop="handleEditToggle(item)"
-                  class="p-4 bg-okinawa-blue text-white rounded-2xl shadow-lg active:scale-95"
+                  @touchstart.stop
+                  class="p-4 bg-okinawa-blue text-white rounded-2xl shadow-lg active:scale-95 touch-manipulation"
                 >
                   <Edit2 class="w-6 h-6" />
                 </button>
                 <button 
                   @click.stop="confirmDeletePlanning(item.id)"
-                  class="p-4 bg-red-500 text-white rounded-2xl shadow-lg active:scale-95"
+                  @touchstart.stop
+                  class="p-4 bg-red-500 text-white rounded-2xl shadow-lg active:scale-95 touch-manipulation"
                 >
                   <Trash2 class="w-6 h-6" />
                 </button>
@@ -2740,7 +2744,7 @@ const countdownData = computed(() => {
 
               <!-- Main Item Layer -->
               <div 
-                class="techo-card p-4 flex items-center gap-4 group cursor-pointer transition-transform duration-300"
+                class="techo-card p-4 flex items-center gap-4 group cursor-pointer transition-transform duration-300 relative z-20"
                 :class="swipedItemId === item.id ? '-translate-x-[140px]' : 'translate-x-0'"
                 @click="togglePlanningItem(item)"
                 @touchstart="handleTouchStart($event, item.id, 'planning')"
