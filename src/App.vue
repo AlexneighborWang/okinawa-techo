@@ -609,7 +609,6 @@ const planningFilterMember = ref('全體');
 const newItemText = ref('');
 const editingPlanningId = ref<number | null>(null);
 const editingPlanningText = ref('');
-const confirmingDeleteId = ref<number | null>(null);
 const selectedBagType = ref('隨身小包');
 
 const defaultPlanning = {
@@ -672,6 +671,7 @@ const handleEditToggle = (item: any) => {
 const startEditPlanning = (item: any) => {
   editingPlanningId.value = item.id;
   editingPlanningText.value = item.text;
+  swipedItemId.value = null;
 };
 
 const saveEditPlanning = async (item: any) => {
@@ -735,16 +735,7 @@ const togglePlanningItem = async (item: any) => {
 };
 
 const confirmDeletePlanning = (id: any) => {
-  if (confirmingDeleteId.value === id) {
-    deletePlanningItem(planningTab.value, id);
-    confirmingDeleteId.value = null;
-  } else {
-    confirmingDeleteId.value = id;
-    // Auto reset after 3 seconds
-    setTimeout(() => {
-      if (confirmingDeleteId.value === id) confirmingDeleteId.value = null;
-    }, 3000);
-  }
+  deletePlanningItem(planningTab.value, id);
 };
 
 const deletePlanningItem = async (tab: string, id: any) => {
@@ -1595,14 +1586,6 @@ const getTravelTime = (index: number) => {
   return `${mins}m`;
 };
 
-const openMap = (location: string, url?: string) => {
-  if (url) {
-    window.open(url, '_blank');
-  } else {
-    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank');
-  }
-};
-
 const isDatePassed = (dateStr: string) => {
   if (!dateStr) return true;
   const today = new Date();
@@ -2126,25 +2109,27 @@ const countdownData = computed(() => {
                   <p class="text-sm font-bold text-techo-ink/40 uppercase mb-2">取車 (Pick-up)</p>
                   <p class="text-lg font-bold">2026-09-27</p>
                   <p class="text-base text-techo-ink/60">08:00</p>
-                  <p 
+                  <a 
                     class="text-sm mt-3 text-okinawa-blue font-bold leading-tight flex items-center gap-1 cursor-pointer hover:underline"
-                    @click="openMap('沖繩縣那霸市牧志2-17-10')"
+                    :href="`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('沖繩縣那霸市牧志2-17-10')}`"
+                    target="_blank"
                   >
                     <MapPin class="w-4 h-4" />
                     美榮橋站前 外語櫃檯
-                  </p>
+                  </a>
                 </div>
                 <div class="bg-techo-ink/5 p-4 rounded-2xl">
                   <p class="text-sm font-bold text-techo-ink/40 uppercase mb-2">還車 (Drop-off)</p>
                   <p class="text-lg font-bold">2026-09-29</p>
                   <p class="text-base text-techo-ink/60">14:00</p>
-                  <p 
+                  <a 
                     class="text-sm mt-3 text-okinawa-blue font-bold leading-tight flex items-center gap-1 cursor-pointer hover:underline"
-                    @click="openMap('沖繩縣豐見城市豐崎1-1174')"
+                    :href="`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('沖繩縣豐見城市豐崎1-1174')}`"
+                    target="_blank"
                   >
                     <MapPin class="w-4 h-4" />
                     那霸機場 外語櫃檯
-                  </p>
+                  </a>
                 </div>
               </div>
 
@@ -3216,13 +3201,14 @@ const countdownData = computed(() => {
 
           <div class="pt-4 border-t border-techo-ink/5">
             <p class="text-[10px] font-bold text-techo-ink/40 uppercase tracking-widest mb-2">地點</p>
-            <p 
+            <a 
               class="text-sm text-techo-ink/80 leading-relaxed cursor-pointer hover:text-okinawa-blue transition-colors flex items-start gap-2 group"
-              @click="openMap(selectedHotel.location, selectedHotel.mapUrl)"
+              :href="selectedHotel.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedHotel.location)}`"
+              target="_blank"
             >
               <MapPin class="w-4 h-4 mt-0.5 flex-shrink-0 text-okinawa-blue group-hover:scale-110 transition-transform" />
               <span class="underline decoration-okinawa-blue/30 underline-offset-4">{{ selectedHotel.location }}</span>
-            </p>
+            </a>
           </div>
         </div>
         
