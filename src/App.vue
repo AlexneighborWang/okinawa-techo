@@ -211,9 +211,10 @@ const handleHotelDetailsScroll = (e: Event) => {
     return;
   }
 
+  // Use a small buffer for float precision
   if (scrollLeft <= 1) {
     target.scrollTo({ left: width * total, behavior: 'auto' });
-  } else if (scrollLeft >= width * (total + 1) - 1) {
+  } else if (scrollLeft >= width * (total + 1) - 1.5) {
     target.scrollTo({ left: width, behavior: 'auto' });
   }
 
@@ -234,7 +235,7 @@ const handleZoomScroll = (e: Event) => {
 
   if (scrollLeft <= 1) {
     target.scrollTo({ left: width * total, behavior: 'auto' });
-  } else if (scrollLeft >= width * (total + 1) - 1) {
+  } else if (scrollLeft >= width * (total + 1) - 1.5) {
     target.scrollTo({ left: width, behavior: 'auto' });
   }
 
@@ -874,6 +875,9 @@ const speak = (text: string) => {
     showToast('您的瀏覽器不支援語音播放', 'error');
     return;
   }
+  // Cancel current speech to prevent queuing
+  window.speechSynthesis.cancel();
+  
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'ja-JP';
   utterance.rate = 0.9;
@@ -1572,10 +1576,6 @@ const setupRealtimeListeners = () => {
   unsubscribes.push(hotelsUnsub);
 };
 
-onUnmounted(() => {
-  unsubscribes.forEach(unsub => unsub());
-});
-
 // Watch for changes and save to localStorage
 watch(allScheduleItems, (newVal) => {
   localStorage.setItem('okinawa_schedule', JSON.stringify(newVal));
@@ -1620,6 +1620,11 @@ const scrollToTop = () => {
 
 onMounted(() => {
   window.addEventListener('scroll', handleScroll);
+});
+
+onUnmounted(() => {
+  unsubscribes.forEach(unsub => unsub());
+  window.removeEventListener('scroll', handleScroll);
 });
 
 const getTravelTime = (index: number) => {
@@ -1843,8 +1848,8 @@ const countdownData = computed(() => {
                     <span class="text-[9px] font-bold text-okinawa-blue/60">9/22 開啟更新</span>
                   </div>
                 </div>
-                <div class="flex items-baseline gap-2">
-                  <span class="font-bold text-lg">{{ tripDays.find(d => d.date === selectedDay)?.temp }}</span>
+                <div class="flex flex-col">
+                  <span class="font-bold text-lg leading-tight">{{ tripDays.find(d => d.date === selectedDay)?.temp }}</span>
                   <span class="text-xs text-techo-ink/40">
                     {{ tripDays.find(d => d.date === selectedDay)?.minTemp }} ~ {{ tripDays.find(d => d.date === selectedDay)?.maxTemp }}
                   </span>
