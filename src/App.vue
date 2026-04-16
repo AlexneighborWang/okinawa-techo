@@ -198,50 +198,98 @@ const zoomedSliderRef = ref<HTMLElement | null>(null);
 const hotelDetailsSliderRef = ref<HTMLElement | null>(null);
 const hotelDetailsImageIndex = ref(0);
 
+const handleHotelDetailsScroll = (e: Event) => {
+  const target = e.target as HTMLElement;
+  const width = target.clientWidth;
+  const scrollLeft = target.scrollLeft;
+  if (!selectedHotel.value || width === 0) return;
+  
+  const total = selectedHotel.value.images.length;
+  if (total <= 1) {
+    hotelDetailsImageIndex.value = 0;
+    return;
+  }
+
+  if (scrollLeft <= 1) {
+    target.scrollTo({ left: width * total, behavior: 'auto' });
+  } else if (scrollLeft >= width * (total + 1) - 1) {
+    target.scrollTo({ left: width, behavior: 'auto' });
+  }
+
+  hotelDetailsImageIndex.value = (Math.round(target.scrollLeft / width) - 1 + total) % total;
+};
+
+const handleZoomScroll = (e: Event) => {
+  const target = e.target as HTMLElement;
+  const width = target.clientWidth;
+  const scrollLeft = target.scrollLeft;
+  if (!selectedHotel.value || width === 0) return;
+  
+  const total = selectedHotel.value.images.length;
+  if (total <= 1) {
+    zoomedImageIndex.value = 0;
+    return;
+  }
+
+  if (scrollLeft <= 1) {
+    target.scrollTo({ left: width * total, behavior: 'auto' });
+  } else if (scrollLeft >= width * (total + 1) - 1) {
+    target.scrollTo({ left: width, behavior: 'auto' });
+  }
+
+  zoomedImageIndex.value = (Math.round(target.scrollLeft / width) - 1 + total) % total;
+};
+
 const nextHotelImage = () => {
   if (!selectedHotel.value) return;
   const total = selectedHotel.value.images.length;
-  hotelDetailsImageIndex.value = (hotelDetailsImageIndex.value + 1) % total;
+  if (total <= 1) return;
+  
   if (hotelDetailsSliderRef.value) {
     const width = hotelDetailsSliderRef.value.clientWidth;
-    hotelDetailsSliderRef.value.scrollTo({ left: width * hotelDetailsImageIndex.value, behavior: 'smooth' });
+    const currentScroll = hotelDetailsSliderRef.value.scrollLeft;
+    hotelDetailsSliderRef.value.scrollTo({ left: currentScroll + width, behavior: 'smooth' });
   }
 };
 
 const prevHotelImage = () => {
   if (!selectedHotel.value) return;
   const total = selectedHotel.value.images.length;
-  hotelDetailsImageIndex.value = (hotelDetailsImageIndex.value - 1 + total) % total;
+  if (total <= 1) return;
+  
   if (hotelDetailsSliderRef.value) {
     const width = hotelDetailsSliderRef.value.clientWidth;
-    hotelDetailsSliderRef.value.scrollTo({ left: width * hotelDetailsImageIndex.value, behavior: 'smooth' });
+    const currentScroll = hotelDetailsSliderRef.value.scrollLeft;
+    hotelDetailsSliderRef.value.scrollTo({ left: currentScroll - width, behavior: 'smooth' });
   }
 };
 
-const openZoom = (index: number, behavior: ScrollBehavior = 'auto') => {
+const openZoom = (index: number) => {
   zoomedImageIndex.value = index;
   nextTick(() => {
     if (zoomedSliderRef.value) {
       const width = zoomedSliderRef.value.clientWidth;
-      zoomedSliderRef.value.scrollTo({ left: width * index, behavior });
+      zoomedSliderRef.value.scrollTo({ left: width * (index + 1), behavior: 'auto' });
     }
   });
 };
 
 const nextImage = () => {
   if (!selectedHotel.value || zoomedImageIndex.value === null) return;
-  const total = selectedHotel.value.images.length;
-  const nextIndex = (zoomedImageIndex.value + 1) % total;
-  // 如果是從最後一張到第一張，用 auto 避免長距離回滾，或者用 smooth 但使用者會看到回滾
-  // 為了「滑動」感，這裡先用 smooth
-  openZoom(nextIndex, 'smooth');
+  if (zoomedSliderRef.value) {
+    const width = zoomedSliderRef.value.clientWidth;
+    const currentScroll = zoomedSliderRef.value.scrollLeft;
+    zoomedSliderRef.value.scrollTo({ left: currentScroll + width, behavior: 'smooth' });
+  }
 };
 
 const prevImage = () => {
   if (!selectedHotel.value || zoomedImageIndex.value === null) return;
-  const total = selectedHotel.value.images.length;
-  const prevIndex = (zoomedImageIndex.value - 1 + total) % total;
-  openZoom(prevIndex, 'smooth');
+  if (zoomedSliderRef.value) {
+    const width = zoomedSliderRef.value.clientWidth;
+    const currentScroll = zoomedSliderRef.value.scrollLeft;
+    zoomedSliderRef.value.scrollTo({ left: currentScroll - width, behavior: 'smooth' });
+  }
 };
 
 const editingItem = ref<any>(null);
@@ -277,6 +325,7 @@ const flightDetailsData: Record<string, any> = {
 
 // Bookings Category Logic
 const bookingCategory = ref('flight');
+const ticketTab = ref('esim'); // 'esim', 'vsw'
 const bookingCategories = [
   { id: 'flight', label: '機票', icon: Plane },
   { id: 'stay', label: '住宿', icon: Hotel },
@@ -401,8 +450,9 @@ const forceSyncAllToFirebase = async (silent = false) => {
       }
     }
     
-    // 5. Vouchers (eSIMs)
+    // 5. Vouchers (eSIMs and VSWs)
     await syncToFirebase('vouchers', 'esims', { images: esims.value });
+    await syncToFirebase('vouchers', 'vsws', { images: vsws.value });
     
     // 6. Settings
     await syncToFirebase('settings', 'app', { mainTitle: mainTitle.value, subTitle: subTitle.value });
@@ -506,7 +556,15 @@ const migrateAndSync = () => {
 
 const esimMembers = ['爸', '媽', '德', '珊'];
 const esims = ref<string[]>(JSON.parse(localStorage.getItem('okinawa_esims') || '["", "", "", ""]'));
+const vsws = ref<string[]>(JSON.parse(localStorage.getItem('okinawa_vsws') || '["", "", "", ""]'));
 const selectedHotel = ref<HotelInfo | null>(null);
+
+const loopingImages = computed(() => {
+  if (!selectedHotel.value) return [];
+  const imgs = selectedHotel.value.images;
+  if (imgs.length <= 1) return imgs;
+  return [imgs[imgs.length - 1], ...imgs, imgs[0]];
+});
 
 // Toast System
 const toast = reactive({
@@ -759,6 +817,9 @@ let touchStartX = 0;
 let touchCurrentX = 0;
 
 const handleTouchStart = (e: TouchEvent, id: string) => {
+  if (swipedItemId.value && swipedItemId.value !== id) {
+    swipedItemId.value = null;
+  }
   touchStartX = e.touches[0].clientX;
   touchCurrentX = touchStartX;
 };
@@ -769,15 +830,15 @@ const handleTouchMove = (e: TouchEvent) => {
 
 const handleTouchEnd = (id: string) => {
   const diff = touchCurrentX - touchStartX;
-  if (diff > 50) {
+  if (diff < -50) {
     swipedItemId.value = id;
-  } else if (diff < -50) {
+  } else if (diff > 50) {
     swipedItemId.value = null;
   }
 };
 
 const togglePlanningItem = async (item: any) => {
-  if (swipedItemId.value === item.id) {
+  if (swipedItemId.value) {
     swipedItemId.value = null;
     return;
   }
@@ -1024,6 +1085,42 @@ const triggerEsimUpload = (index: number) => {
   if (input) input.click();
 };
 
+const handleVswUpload = (event: Event, index: number) => {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files[0]) {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const rawResult = e.target?.result as string;
+      try {
+        const compressedResult = await compressImage(rawResult);
+        vsws.value[index] = compressedResult;
+        localStorage.setItem('okinawa_vsws', JSON.stringify(vsws.value));
+        
+        // Sync to Firebase
+        await syncToFirebase('vouchers', 'vsws', { images: vsws.value });
+        showToast('VSW 憑證上傳成功', 'success');
+      } catch (err) {
+        console.error('VSW upload failed:', err);
+        showToast('上傳失敗，圖片可能太大', 'error');
+      }
+    };
+    reader.readAsDataURL(target.files[0]);
+  }
+};
+
+const removeVsw = async (index: number) => {
+  vsws.value[index] = "";
+  localStorage.setItem('okinawa_vsws', JSON.stringify(vsws.value));
+  
+  // Sync to Firebase
+  await syncToFirebase('vouchers', 'vsws', { images: vsws.value });
+};
+
+const triggerVswUpload = (index: number) => {
+  const input = document.getElementById(`vsw-input-${index}`);
+  if (input) input.click();
+};
+
 const compressImage = (base64Str: string, maxWidth = 600): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
@@ -1105,6 +1202,13 @@ const openHotelModal = (hotel: HotelInfo) => {
     if (def) hotel.freeCancellationDate = def.freeCancellationDate;
   }
   selectedHotel.value = hotel;
+  hotelDetailsImageIndex.value = 0;
+  nextTick(() => {
+    if (hotelDetailsSliderRef.value) {
+      const width = hotelDetailsSliderRef.value.clientWidth;
+      hotelDetailsSliderRef.value.scrollTo({ left: width, behavior: 'auto' });
+    }
+  });
 };
 
 // Declaration Modal Logic
@@ -1408,6 +1512,15 @@ const loginWithGoogle = async () => {
   
   isLoggingIn.value = true;
   const provider = new GoogleAuthProvider();
+  
+  // Safety timeout in case popup hangs silently (common in in-app browsers)
+  const timeoutId = setTimeout(() => {
+    if (isLoggingIn.value) {
+      isLoggingIn.value = false;
+      showToast('登入請求超時，請確認是否有彈出視窗被攔截，或嘗試使用其他瀏覽器。', 'error');
+    }
+  }, 30000);
+
   try {
     await signInWithPopup(auth, provider);
     showToast('登入成功', 'success');
@@ -1421,6 +1534,7 @@ const loginWithGoogle = async () => {
       showToast('登入失敗，請稍後再試。', 'error');
     }
   } finally {
+    clearTimeout(timeoutId);
     isLoggingIn.value = false;
   }
 };
@@ -1453,7 +1567,7 @@ const setupRealtimeListeners = () => {
   });
   unsubscribes.push(settingsUnsub);
 
-  // 0.1 Vouchers (eSIMs) Sync
+  // 0.1 Vouchers (eSIMs and VSWs) Sync
   const vouchersUnsub = onSnapshot(doc(db, 'vouchers', 'esims'), (snapshot) => {
     if (snapshot.exists()) {
       const data = snapshot.data();
@@ -1462,6 +1576,15 @@ const setupRealtimeListeners = () => {
     }
   });
   unsubscribes.push(vouchersUnsub);
+
+  const vswsUnsub = onSnapshot(doc(db, 'vouchers', 'vsws'), (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      updateSyncCache('vouchers', 'vsws', data);
+      if (data.images) vsws.value = data.images;
+    }
+  });
+  unsubscribes.push(vswsUnsub);
 
   // 1. Schedule Sync
   const scheduleUnsub = onSnapshot(collection(db, 'schedule'), (snapshot) => {
@@ -1581,6 +1704,10 @@ watch(planningData, (newVal) => {
 
 watch(esims, (newVal) => {
   localStorage.setItem('okinawa_esims', JSON.stringify(newVal));
+}, { deep: true });
+
+watch(vsws, (newVal) => {
+  localStorage.setItem('okinawa_vsws', JSON.stringify(newVal));
 }, { deep: true });
 
 watch(mainTitle, (newVal) => {
@@ -2207,9 +2334,31 @@ const countdownData = computed(() => {
             <Ticket class="w-3 h-3" />
             <span>票券憑證</span>
           </div>
+
+          <!-- Sub-category Tabs -->
+          <div class="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+            <button 
+              @click="ticketTab = 'esim'"
+              :class="[
+                'px-5 py-2.5 rounded-2xl font-bold transition-all whitespace-nowrap text-sm',
+                ticketTab === 'esim' ? 'bg-okinawa-blue text-white shadow-md' : 'bg-techo-ink/5 text-techo-ink/60'
+              ]"
+            >
+              eSIM QR 碼
+            </button>
+            <button 
+              @click="ticketTab = 'vsw'"
+              :class="[
+                'px-5 py-2.5 rounded-2xl font-bold transition-all whitespace-nowrap text-sm',
+                ticketTab === 'vsw' ? 'bg-okinawa-blue text-white shadow-md' : 'bg-techo-ink/5 text-techo-ink/60'
+              ]"
+            >
+              VSW QR 碼
+            </button>
+          </div>
           
           <!-- eSIM Section -->
-          <div class="space-y-4">
+          <div v-if="ticketTab === 'esim'" class="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
             <div class="flex items-center justify-between px-1">
               <div class="flex items-center gap-2">
                 <QrCode class="w-4 h-4 text-okinawa-blue" />
@@ -2255,6 +2404,58 @@ const countdownData = computed(() => {
                   accept="image/*" 
                   class="hidden" 
                   @change="handleEsimUpload($event, idx)" 
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- VSW Section -->
+          <div v-if="ticketTab === 'vsw'" class="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+            <div class="flex items-center justify-between px-1">
+              <div class="flex items-center gap-2">
+                <QrCode class="w-4 h-4 text-okinawa-blue" />
+                <span class="text-sm font-bold">VSW QR 碼 (4人)</span>
+              </div>
+              <span class="text-[10px] text-techo-ink/40 font-bold uppercase tracking-wider">點擊上傳憑證</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div v-for="(vsw, idx) in vsws" :key="idx" class="techo-card overflow-hidden aspect-square relative group">
+                <div v-if="!vsw" @click="triggerVswUpload(idx)" class="w-full h-full flex flex-col items-center justify-center gap-2 bg-techo-ink/5 cursor-pointer hover:bg-techo-ink/10 transition-colors">
+                  <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-techo-ink/20 shadow-sm">
+                    <Upload class="w-5 h-5" />
+                  </div>
+                  <span class="text-[10px] font-bold text-techo-ink/40 uppercase">{{ esimMembers[idx] }}</span>
+                </div>
+                
+                <template v-else>
+                  <img :src="vsw" class="w-full h-full object-contain p-2" />
+                  <!-- Delete Button -->
+                  <button 
+                    @click="removeVsw(idx)" 
+                    class="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full shadow-lg active:scale-90 transition-transform z-10"
+                  >
+                    <Trash2 class="w-3.5 h-3.5" />
+                  </button>
+                  <!-- Edit Button -->
+                  <button 
+                    @click="triggerVswUpload(idx)" 
+                    class="absolute top-2 left-2 p-1.5 bg-white text-techo-ink rounded-full shadow-lg active:scale-90 transition-transform z-10"
+                  >
+                    <Edit2 class="w-3.5 h-3.5" />
+                  </button>
+                  
+                  <div class="absolute bottom-2 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-sm px-3 py-0.5 rounded-full text-[10px] font-bold text-techo-ink/60 shadow-sm">
+                    {{ esimMembers[idx] }}
+                  </div>
+                </template>
+
+                <input 
+                  :id="`vsw-input-${idx}`" 
+                  type="file" 
+                  accept="image/*" 
+                  class="hidden" 
+                  @change="handleVswUpload($event, idx)" 
                 />
               </div>
             </div>
@@ -2610,27 +2811,27 @@ const countdownData = computed(() => {
             >
               <!-- Swipe Actions Layer -->
               <div 
-                class="absolute inset-y-0 left-0 flex items-center gap-2 px-4 transition-all duration-300"
-                :class="swipedItemId === item.id ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-full'"
+                class="absolute inset-y-0 right-0 flex items-center gap-2 px-4 transition-all duration-300"
+                :class="swipedItemId === item.id ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-full'"
               >
                 <button 
                   @click.stop="handleEditToggle(item)"
-                  class="p-3 bg-okinawa-blue text-white rounded-2xl shadow-lg active:scale-95"
+                  class="p-4 bg-okinawa-blue text-white rounded-2xl shadow-lg active:scale-95"
                 >
-                  <Edit2 class="w-5 h-5" />
+                  <Edit2 class="w-6 h-6" />
                 </button>
                 <button 
                   @click.stop="confirmDeletePlanning(item.id)"
-                  class="p-3 bg-red-500 text-white rounded-2xl shadow-lg active:scale-95"
+                  class="p-4 bg-red-500 text-white rounded-2xl shadow-lg active:scale-95"
                 >
-                  <Trash2 class="w-5 h-5" />
+                  <Trash2 class="w-6 h-6" />
                 </button>
               </div>
 
               <!-- Main Item Layer -->
               <div 
                 class="techo-card p-4 flex items-center gap-4 group cursor-pointer transition-transform duration-300"
-                :class="swipedItemId === item.id ? 'translate-x-[110px]' : 'translate-x-0'"
+                :class="swipedItemId === item.id ? '-translate-x-[140px]' : 'translate-x-0'"
                 @click="togglePlanningItem(item)"
                 @touchstart="handleTouchStart($event, item.id)"
                 @touchmove="handleTouchMove"
@@ -3055,10 +3256,7 @@ const countdownData = computed(() => {
       <div 
         ref="zoomedSliderRef"
         class="flex-grow flex overflow-x-auto snap-x snap-mandatory no-scrollbar relative"
-        @scroll="(e) => {
-          const target = e.target as HTMLElement;
-          zoomedImageIndex = Math.round(target.scrollLeft / target.clientWidth);
-        }"
+        @scroll="handleZoomScroll"
       >
         <!-- Left/Right Navigation Buttons -->
         <button 
@@ -3074,7 +3272,7 @@ const countdownData = computed(() => {
           <ChevronRight class="w-6 h-6" />
         </button>
 
-        <div v-for="(img, idx) in selectedHotel.images" :key="idx" class="min-w-full h-full flex items-center justify-center snap-center p-4">
+        <div v-for="(img, idx) in loopingImages" :key="idx" class="min-w-full h-full flex items-center justify-center snap-center p-4" @click="zoomedImageIndex = null">
           <img 
             :src="img" 
             class="max-w-full max-h-full object-contain rounded-lg shadow-2xl" 
@@ -3102,17 +3300,15 @@ const countdownData = computed(() => {
           <div 
             ref="hotelDetailsSliderRef"
             class="flex overflow-x-auto snap-x snap-mandatory no-scrollbar h-full"
-            @scroll="(e) => {
-              const target = e.target as HTMLElement;
-              hotelDetailsImageIndex = Math.round(target.scrollLeft / target.clientWidth);
-            }"
+            @scroll="handleHotelDetailsScroll"
           >
-            <div v-for="(img, idx) in selectedHotel.images" :key="idx" class="min-w-full h-full snap-center relative cursor-zoom-in" @click="openZoom(idx)">
+            <div v-for="(img, idx) in loopingImages" :key="idx" class="min-w-full h-full snap-center relative cursor-zoom-in" @click="openZoom((idx - 1 + selectedHotel.images.length) % selectedHotel.images.length)">
               <img :src="img" class="w-full h-full object-cover" referrerPolicy="no-referrer" crossorigin="anonymous" />
-              <div class="absolute top-4 right-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full text-[10px] text-white font-bold">
-                {{ idx + 1 }} / {{ selectedHotel.images.length }}
-              </div>
             </div>
+          </div>
+
+          <div class="absolute top-4 right-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full text-[10px] text-white font-bold z-10">
+            {{ hotelDetailsImageIndex + 1 }} / {{ selectedHotel.images.length }}
           </div>
 
           <!-- Navigation Buttons -->
@@ -3270,15 +3466,15 @@ const countdownData = computed(() => {
         </div>
 
         <div class="bg-techo-ink/5 rounded-3xl p-6 mb-6 space-y-4">
-          <p class="text-[17px] font-bold text-okinawa-blue flex gap-3"><span>1.</span> <span>絕不表現不耐煩的態度</span></p>
-          <p class="text-[17px] font-bold text-okinawa-blue flex gap-3"><span>2.</span> <span>絕不對任何行程指手畫腳</span></p>
-          <p class="text-[17px] font-bold text-okinawa-blue flex gap-3"><span>3.</span> <span>絕不擅自消失</span></p>
-          <p class="text-[17px] font-bold text-okinawa-blue flex gap-3"><span>4.</span> <span>該花錢就花錢要省回家再省</span></p>
-          <p class="text-[17px] font-bold text-okinawa-blue flex gap-3"><span>5.</span> <span>該休息就休息累了就說</span></p>
-          <p class="text-[17px] font-bold text-okinawa-blue flex gap-3"><span>6.</span> <span>有想逛、想看、想吃的絕對要說</span></p>
-          <p class="text-[17px] font-bold text-okinawa-blue flex gap-3"><span>7.</span> <span>開開心心出遊 平平安安回家</span></p>
+          <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>1.</span> <span>絕不表現不耐煩的態度</span></p>
+          <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>2.</span> <span>絕不對任何行程指手畫腳</span></p>
+          <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>3.</span> <span>絕不擅自消失</span></p>
+          <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>4.</span> <span>該花錢就花錢要省回家再省</span></p>
+          <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>5.</span> <span>該休息就休息累了就說</span></p>
+          <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>6.</span> <span>有想逛、想看、想吃的絕對要說</span></p>
+          <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>7.</span> <span>開開心心出遊 平平安安回家</span></p>
           
-          <div class="pt-3 mt-3 border-t border-techo-ink/10 text-techo-ink/60 text-xs leading-relaxed space-y-1">
+          <div class="pt-3 mt-3 border-t border-techo-ink/10 text-techo-ink/60 text-[13px] leading-relaxed space-y-1">
             <p>不管發生什麼事我都會聽從指示</p>
             <p>行程我都事先同意過了</p>
             <p>不會臨場抱怨別人的安排</p>
