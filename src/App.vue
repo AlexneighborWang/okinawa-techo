@@ -73,6 +73,7 @@ import {
 } from 'firebase/firestore';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from 'firebase/auth';
 import { APP_ICON } from './assets';
+import { sendMessageToGemini } from './services/geminiService';
 
 // Views
 const currentView = ref('schedule');
@@ -803,7 +804,64 @@ const filteredPlanningData = computed(() => {
 });
 
 // Tools Logic
-const toolSubView = ref('main'); // 'main', 'phrases', 'emergency'
+const toolSubView = ref('main'); // 'main', 'phrases', 'emergency', 'ai'
+const aiInput = ref('');
+const aiChatContainer = ref<HTMLElement | null>(null);
+const aiLoading = ref(false);
+const aiMessages = reactive<{ role: 'user' | 'assistant', text: string, image?: string }[]>([]);
+const aiImageUpload = ref<HTMLInputElement | null>(null);
+const aiSelectedImage = ref<string | null>(null);
+
+const handleAiImageUpload = (event: Event) => {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      aiSelectedImage.value = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  }
+};
+
+const sendToAi = async () => {
+  if ((!aiInput.value.trim() && !aiSelectedImage.value) || aiLoading.value) return;
+
+  const userMsg = aiInput.value;
+  const userImg = aiSelectedImage.value;
+  
+  aiMessages.push({ 
+    role: 'user', 
+    text: userMsg || (userImg ? '請分析這張圖片內容。' : ''),
+    image: userImg || undefined
+  });
+  
+  aiInput.value = '';
+  aiSelectedImage.value = null;
+  aiLoading.value = true;
+  
+  nextTick(() => {
+    if (aiChatContainer.value) {
+      aiChatContainer.value.scrollTop = aiChatContainer.value.scrollHeight;
+    }
+  });
+
+  try {
+    const prompt = userMsg || "這是一張沖繩旅遊的照片，可能是菜單、景點或說明板，請幫我翻譯成中文並解釋內容。";
+    const imageBase64 = userImg ? userImg.split(',')[1] : undefined;
+    
+    const response = await sendMessageToGemini(prompt, imageBase64);
+    aiMessages.push({ role: 'assistant', text: response });
+  } catch (error) {
+    aiMessages.push({ role: 'assistant', text: '抱歉，發生了一些錯誤，請再試一次。' });
+  } finally {
+    aiLoading.value = false;
+    nextTick(() => {
+      if (aiChatContainer.value) {
+        aiChatContainer.value.scrollTop = aiChatContainer.value.scrollHeight;
+      }
+    });
+  }
+};
 const toolJpyAmount = ref<number | string>('');
 const toolExchangeRate = computed(() => exchangeRates['JPY'] || 0.204);
 const toolTwdAmount = computed(() => {
@@ -2706,25 +2764,14 @@ const countdownData = computed(() => {
             打開我的口袋名單
           </a>
 
-          <!-- Google Translate Button -->
-          <a 
-            href="https://translate.google.com/?sl=zh-TW&tl=ja&op=translate" 
-            target="_blank"
-            class="flex items-center justify-center gap-3 w-full py-4 bg-okinawa-blue text-white rounded-2xl font-bold shadow-lg shadow-okinawa-blue/20 active:scale-95 transition-transform"
-          >
-            <Languages class="w-5 h-5" />
-            打開 Google 翻譯
-          </a>
-
-          <!-- Gemini Button -->
-          <a 
-            href="https://gemini.google.com/" 
-            target="_blank"
+          <!-- Gemini Button (Built-in) -->
+          <button 
+            @click="toolSubView = 'ai'"
             class="flex items-center justify-center gap-3 w-full py-4 bg-gradient-to-r from-[#4285f4] via-[#9b72cb] to-[#d96570] text-white rounded-2xl font-bold shadow-lg shadow-purple-500/20 active:scale-95 transition-transform"
           >
             <Sparkles class="w-5 h-5" />
-            打開 Gemini AI
-          </a>
+            打開沖繩 AI 助手
+          </button>
 
           <!-- Compact Exchange Calculator -->
           <div class="techo-card p-5 space-y-4">
@@ -2857,6 +2904,116 @@ const countdownData = computed(() => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Gemini AI Sub-page -->
+        <div v-if="toolSubView === 'ai'" class="flex flex-col h-[65vh] animate-in slide-in-from-right duration-300">
+          <div class="flex items-center justify-between mb-4">
+            <button @click="toolSubView = 'main'" class="flex items-center gap-2 text-techo-ink/60 font-bold hover:text-okinawa-blue transition-colors">
+              <ArrowLeft class="w-5 h-5" />
+              返回工具
+            </button>
+            <div class="px-3 py-1 bg-purple-100/50 text-purple-600 rounded-full flex items-center gap-1.5 ring-1 ring-purple-200">
+              <Sparkles class="w-3 h-3" />
+              <span class="text-[10px] font-bold uppercase tracking-wider">Gemini Powered</span>
+            </div>
+          </div>
+
+          <!-- Chat Area -->
+          <div 
+            ref="aiChatContainer"
+            class="flex-grow bg-white/50 backdrop-blur-sm rounded-3xl p-4 overflow-y-auto space-y-4 mb-4 border border-techo-ink/5"
+          >
+            <!-- Welcome Message -->
+            <div v-if="aiMessages.length === 0" class="text-center py-10 space-y-3">
+              <div class="w-16 h-16 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-full flex items-center justify-center mx-auto">
+                <Sparkles class="w-8 h-8 text-purple-600 animate-pulse" />
+              </div>
+              <h3 class="font-bold text-lg text-techo-ink">您好，我是沖繩 AI 助手</h3>
+              <p class="text-xs text-techo-ink/40 max-w-[200px] mx-auto">我可以幫您翻譯日文菜單、查詢天氣或推薦私房景點。</p>
+            </div>
+
+            <div 
+              v-for="(msg, idx) in aiMessages" 
+              :key="idx" 
+              :class="['flex', msg.role === 'user' ? 'justify-end' : 'justify-start']"
+            >
+              <div 
+                :class="[
+                  'max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed shadow-sm',
+                  msg.role === 'user' ? 'bg-okinawa-blue text-white rounded-tr-none' : 'bg-white text-techo-ink rounded-tl-none border border-techo-ink/5'
+                ]"
+              >
+                <!-- User Uploaded Image -->
+                <img 
+                  v-if="msg.image" 
+                  :src="msg.image" 
+                  class="w-full h-auto rounded-xl mb-3 shadow-md border-2 border-white"
+                  referrerPolicy="no-referrer"
+                />
+                <p v-if="msg.text" class="whitespace-pre-wrap">{{ msg.text }}</p>
+              </div>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div v-if="aiLoading" class="flex justify-start">
+              <div class="bg-white border border-techo-ink/5 p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
+                <div class="flex gap-1">
+                  <span class="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                  <span class="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                  <span class="w-1.5 h-1.5 bg-purple-600 rounded-full animate-bounce"></span>
+                </div>
+                <span class="text-xs text-techo-ink/40 font-bold">思考中...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Input Area -->
+          <div class="space-y-4">
+            <!-- Image Preview -->
+            <div v-if="aiSelectedImage" class="relative inline-block ml-4">
+              <img :src="aiSelectedImage" class="w-20 h-20 object-cover rounded-2xl border-2 border-okinawa-blue shadow-lg" referrerPolicy="no-referrer" />
+              <button 
+                @click="aiSelectedImage = null" 
+                class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 active:scale-90 transition-all"
+              >
+                <X class="w-3 h-3" />
+              </button>
+            </div>
+
+            <div class="flex items-end gap-2 p-2 bg-white rounded-3xl border border-techo-ink/10 shadow-xl focus-within:ring-2 focus-within:ring-okinawa-blue/20 transition-all">
+              <input 
+                type="file" 
+                ref="aiImageUpload" 
+                class="hidden" 
+                accept="image/*" 
+                @change="handleAiImageUpload"
+              >
+              <button 
+                @click="aiImageUpload?.click()"
+                class="p-3 text-techo-ink/40 hover:text-okinawa-blue transition-colors active:scale-90"
+              >
+                <Camera class="w-6 h-6" />
+              </button>
+              
+              <textarea 
+                v-model="aiInput"
+                @keydown.enter.exact.prevent="sendToAi"
+                placeholder="輸入問題或上傳相片..."
+                rows="1"
+                class="flex-grow p-3 bg-transparent resize-none max-h-32 focus:outline-none text-sm font-medium"
+              ></textarea>
+
+              <button 
+                @click="sendToAi"
+                :disabled="(!aiInput.trim() && !aiSelectedImage) || aiLoading"
+                class="p-3 bg-okinawa-blue text-white rounded-2xl shadow-lg active:scale-90 transition-all disabled:opacity-20 disabled:grayscale disabled:scale-100"
+              >
+                <ChevronRight class="w-6 h-6" />
+              </button>
+            </div>
+            <p class="text-[9px] text-center text-techo-ink/20 font-bold">AI 可能會出錯，建議重要資訊仍須對照官方說明。</p>
           </div>
         </div>
 
