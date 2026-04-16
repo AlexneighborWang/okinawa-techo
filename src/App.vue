@@ -571,6 +571,7 @@ const saveExpense = async () => {
 };
 
 const editExpense = (expense: any) => {
+  swipedExpenseId.value = null;
   editingExpenseId.value = expense.id;
   Object.assign(expenseForm, {
     date: expense.date,
@@ -597,6 +598,7 @@ const cancelEdit = () => {
 };
 
 const deleteExpense = async (id: any) => {
+  swipedExpenseId.value = null;
   expenses.value = expenses.value.filter(e => e.id !== id);
   localStorage.setItem('okinawa_expenses', JSON.stringify(expenses.value));
   showToast('紀錄已刪除', 'info');
@@ -690,12 +692,14 @@ const saveEditPlanning = async (item: any) => {
 };
 
 const swipedItemId = ref<string | null>(null);
+const swipedExpenseId = ref<string | null>(null);
 let touchStartX = 0;
 let touchCurrentX = 0;
 
-const handleTouchStart = (e: TouchEvent, id: string) => {
-  if (swipedItemId.value && swipedItemId.value !== id) {
-    swipedItemId.value = null;
+const handleTouchStart = (e: TouchEvent, id: string, type: 'planning' | 'expense' = 'planning') => {
+  const activeId = type === 'planning' ? swipedItemId : swipedExpenseId;
+  if (activeId.value && activeId.value !== id) {
+    activeId.value = null;
   }
   touchStartX = e.touches[0].clientX;
   touchCurrentX = touchStartX;
@@ -705,12 +709,13 @@ const handleTouchMove = (e: TouchEvent) => {
   touchCurrentX = e.touches[0].clientX;
 };
 
-const handleTouchEnd = (id: string) => {
+const handleTouchEnd = (id: string, type: 'planning' | 'expense' = 'planning') => {
   const diff = touchCurrentX - touchStartX;
+  const activeId = type === 'planning' ? swipedItemId : swipedExpenseId;
   if (diff < -50) {
-    swipedItemId.value = id;
+    activeId.value = id;
   } else if (diff > 50) {
-    swipedItemId.value = null;
+    activeId.value = null;
   }
 };
 
@@ -2552,33 +2557,52 @@ const countdownData = computed(() => {
               <p class="text-[10px] font-bold text-techo-ink/40 uppercase">當日小計: <span class="text-okinawa-blue">NT$ {{ group.totalTwd.toLocaleString() }}</span></p>
             </div>
             
-            <div v-for="expense in group.items" :key="expense.id" class="techo-card p-4 flex justify-between items-center group">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-okinawa-blue/10 rounded-full flex items-center justify-center text-okinawa-blue">
-                  <Banknote v-if="expense.paymentMethod === '現金'" class="w-5 h-5" />
-                  <CreditCard v-else-if="expense.paymentMethod === '信用卡'" class="w-5 h-5" />
-                  <Smartphone v-else class="w-5 h-5" />
-                </div>
-                <div>
-                  <p class="font-bold text-techo-ink">{{ expense.item }}</p>
-                  <p class="text-[10px] text-techo-ink/40 font-bold uppercase">
-                    {{ expense.paymentMethod }} ({{ expense.payer }})
-                    <span v-if="expense.location"> • {{ expense.location }}</span>
-                  </p>
-                </div>
+            <div v-for="expense in group.items" :key="expense.id" class="relative overflow-hidden rounded-3xl">
+              <!-- Swipe Actions Layer -->
+              <div 
+                class="absolute inset-y-0 right-0 flex items-center gap-2 px-4 transition-all duration-300"
+                :class="swipedExpenseId === expense.id ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-full'"
+              >
+                <button 
+                  @click.stop="editExpense(expense)"
+                  class="p-3 bg-okinawa-blue text-white rounded-2xl shadow-lg active:scale-95"
+                >
+                  <Edit2 class="w-5 h-5" />
+                </button>
+                <button 
+                  @click.stop="deleteExpense(expense.id)"
+                  class="p-3 bg-red-500 text-white rounded-2xl shadow-lg active:scale-95"
+                >
+                  <Trash2 class="w-5 h-5" />
+                </button>
               </div>
-              <div class="text-right flex items-center gap-3">
-                <div>
+
+              <!-- Main Item Layer -->
+              <div 
+                class="techo-card p-4 flex justify-between items-center transition-transform duration-300"
+                :class="swipedExpenseId === expense.id ? '-translate-x-[140px]' : 'translate-x-0'"
+                @click="swipedExpenseId ? swipedExpenseId = null : null"
+                @touchstart="handleTouchStart($event, expense.id, 'expense')"
+                @touchmove="handleTouchMove"
+                @touchend="handleTouchEnd(expense.id, 'expense')"
+              >
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 bg-okinawa-blue/10 rounded-full flex items-center justify-center text-okinawa-blue">
+                    <Banknote v-if="expense.paymentMethod === '現金'" class="w-5 h-5" />
+                    <CreditCard v-else-if="expense.paymentMethod === '信用卡'" class="w-5 h-5" />
+                    <Smartphone v-else class="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p class="font-bold text-techo-ink">{{ expense.item }}</p>
+                    <p class="text-[10px] text-techo-ink/40 font-bold uppercase">
+                      {{ expense.paymentMethod }} ({{ expense.payer }})
+                      <span v-if="expense.location"> • {{ expense.location }}</span>
+                    </p>
+                  </div>
+                </div>
+                <div class="text-right">
                   <p class="font-bold text-techo-ink">{{ expense.currency === 'JPY' ? '¥' : 'NT$' }}{{ expense.amount.toLocaleString() }}</p>
                   <p class="text-[10px] text-techo-ink/40 font-bold">≈ NT$ {{ expense.twdAmount.toLocaleString() }}</p>
-                </div>
-                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button @click="editExpense(expense)" class="p-2 text-okinawa-blue hover:bg-okinawa-blue/5 rounded-full">
-                    <Edit2 class="w-4 h-4" />
-                  </button>
-                  <button @click="deleteExpense(expense.id)" class="p-2 text-red-500 hover:bg-red-50 rounded-full">
-                    <Trash2 class="w-4 h-4" />
-                  </button>
                 </div>
               </div>
             </div>
@@ -2719,9 +2743,9 @@ const countdownData = computed(() => {
                 class="techo-card p-4 flex items-center gap-4 group cursor-pointer transition-transform duration-300"
                 :class="swipedItemId === item.id ? '-translate-x-[140px]' : 'translate-x-0'"
                 @click="togglePlanningItem(item)"
-                @touchstart="handleTouchStart($event, item.id)"
+                @touchstart="handleTouchStart($event, item.id, 'planning')"
                 @touchmove="handleTouchMove"
-                @touchend="handleTouchEnd(item.id)"
+                @touchend="handleTouchEnd(item.id, 'planning')"
               >
                 <div class="text-okinawa-blue">
                   <CheckCircle2 v-if="item.completed" class="w-6 h-6" />
