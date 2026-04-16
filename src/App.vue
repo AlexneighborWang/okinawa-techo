@@ -352,62 +352,7 @@ interface HotelInfo {
   mapUrl?: string;
 }
 
-const defaultHotels: HotelInfo[] = [
-  {
-    id: 'h1',
-    name: '里士滿酒店那霸久茂地',
-    nameEn: 'Richmond Hotel Naha Kumoji',
-    checkInDate: '9 月 25 日 (五)',
-    checkInTime: '14:00',
-    checkOutDate: '9 月 27 日 (日)',
-    checkOutTime: '11:00',
-    roomType: '雙床房, 非吸煙房 (For 4 people)',
-    guests: '4位成人',
-    location: '2-23-12 Kumoji, Naha, Okinawa-ken, 900-0015 日本',
-    bookingId: '73416254149486',
-    images: ['https://picsum.photos/seed/richmond/600/300'],
-    provider: 'Hotels.com',
-    phone: '+81988690077',
-    freeCancellationDate: '2026-09-18',
-    mapUrl: 'https://maps.app.goo.gl/epAvVFUYHgMrwuoBA'
-  },
-  {
-    id: 'h2',
-    name: '美濱拉平住宅飯店',
-    nameEn: 'LAPIN MIHAMA RESIDENCE HOTEL',
-    checkInDate: '9 月 27 日 (日)',
-    checkInTime: '15:00',
-    checkOutDate: '9 月 28 日 (一)',
-    checkOutTime: '10:00',
-    roomType: '標準家庭房',
-    guests: '4位成人',
-    location: '沖繩, 北谷町, Mihama 2-1-13, 日本',
-    bookingId: '5719028315',
-    images: ['https://picsum.photos/seed/vessel/600/300'],
-    provider: 'Booking.com',
-    phone: '+81989898903',
-    freeCancellationDate: '2026-09-19',
-    mapUrl: 'https://maps.app.goo.gl/upQoLCfskNKSUgMg8'
-  },
-  {
-    id: 'h3',
-    name: '名護櫻之家飯店',
-    nameEn: 'Hotel Sakurano Familia Nago',
-    checkInDate: '9 月 28 日 (一)',
-    checkInTime: '15:00',
-    checkOutDate: '9 月 29 日 (二)',
-    checkOutTime: '11:00',
-    roomType: '加大雙人床房一附 2 張加大雙人床 (附早餐)',
-    guests: '4位成人',
-    location: '沖繩, 名護, Agarie 5-6503-4, 日本',
-    bookingId: '6199768799',
-    images: ['https://picsum.photos/seed/phoenix/600/300'],
-    provider: 'Booking.com',
-    phone: '+81980537070',
-    freeCancellationDate: '2026-09-20',
-    mapUrl: 'https://maps.app.goo.gl/CjHNaFBht7rQegDB7'
-  }
-];
+const defaultHotels: HotelInfo[] = [];
 
 const hotels = ref<HotelInfo[]>(JSON.parse(localStorage.getItem('okinawa_hotels') || JSON.stringify(defaultHotels)));
 
@@ -484,68 +429,11 @@ const migrateAndSync = () => {
     }
   }
 
-  // 2. Sync the specific booking ID and details for h2
-  let h2 = hotels.value.find(h => h.id === 'h2');
-  const defH2 = defaultHotels.find(h => h.id === 'h2')!;
-  
-  if (!h2) {
-    h2 = { ...defH2 };
-    hotels.value.push(h2);
-    needsSave = true;
-  } else {
-    // Update only if different to prevent unnecessary Firebase writes on every startup
-    let h2Changed = false;
-    if (h2.bookingId !== defH2.bookingId) { h2.bookingId = defH2.bookingId; h2Changed = true; }
-    if (h2.phone !== defH2.phone) { h2.phone = defH2.phone; h2Changed = true; }
-    if (h2.roomType !== defH2.roomType) { h2.roomType = defH2.roomType; h2Changed = true; }
-    if (h2.checkInTime !== defH2.checkInTime) { h2.checkInTime = defH2.checkInTime; h2Changed = true; }
-    if (h2.checkOutTime !== defH2.checkOutTime) { h2.checkOutTime = defH2.checkOutTime; h2Changed = true; }
-    if (h2.location !== defH2.location) { h2.location = defH2.location; h2Changed = true; }
-    if (h2.name !== defH2.name) { h2.name = defH2.name; h2Changed = true; }
-    if (h2.nameEn !== defH2.nameEn) { h2.nameEn = defH2.nameEn; h2Changed = true; }
-    if (h2Changed) needsSave = true;
-  }
-
-  // 3. Ensure h3 exists in the current state
-  if (!hotels.value.find(h => h.id === 'h3')) {
-    const h3 = defaultHotels.find(h => h.id === 'h3');
-    if (h3) {
-      hotels.value.push(h3);
-      needsSave = true;
-    }
-  }
-
-  // 4. Sync freeCancellationDate for all hotels if missing
-  hotels.value.forEach(h => {
-    const def = defaultHotels.find(dh => dh.id === h.id);
-    if (def && def.freeCancellationDate && !h.freeCancellationDate) {
-      h.freeCancellationDate = def.freeCancellationDate;
-      needsSave = true;
-    }
-  });
-
-  // 5. Update names and navigation queries ONLY if missing
-  hotels.value.forEach(h => {
-    const def = defaultHotels.find(dh => dh.id === h.id);
-    if (def) {
-      let changed = false;
-      // Only update if the current value is missing or matches an OLD default value we want to upgrade
-      // This prevents overwriting user-customized names/details
-      if (!h.name) { h.name = def.name; changed = true; }
-      if (!h.nameEn) { h.nameEn = def.nameEn; changed = true; }
-      if (!h.mapUrl) { h.mapUrl = def.mapUrl; changed = true; }
-      if (!h.roomType) { h.roomType = def.roomType; changed = true; }
-      if (changed) needsSave = true;
-    }
-  });
-
   if (needsSave) {
     localStorage.setItem('okinawa_hotels', JSON.stringify(hotels.value));
     // If logged in, sync the corrected data to Firebase
     if (userId.value) {
       hotels.value.forEach(h => {
-        // Only sync if it was actually modified in this migration
-        // For simplicity, we sync all for now but we could optimize further
         syncToFirebase('hotels', h.id, h);
       });
     }
@@ -725,22 +613,9 @@ const confirmingDeleteId = ref<number | null>(null);
 const selectedBagType = ref('隨身小包');
 
 const defaultPlanning = {
-  todo: [
-    { id: 'p1', text: '預約租車', completed: true, member: '全體' },
-    { id: 'p2', text: '換日幣', completed: false, member: '全體' },
-    { id: 'p3', text: '申請國際駕照', completed: false, member: '全體' },
-    { id: 'p4', text: '購買保險', completed: false, member: '全體' },
-    { id: 'p5', text: '預約餐廳', completed: false, member: '全體' }
-  ],
-  packing: [
-    { id: 'p6', text: '護照', completed: false, member: '全體' },
-    { id: 'p7', text: '日幣現金', completed: false, member: '全體' },
-    { id: 'p8', text: '駕照正本+譯本', completed: false, member: '全體' }
-  ],
-  shopping: [
-    { id: 'p9', text: '合利他命', completed: false, member: '全體' },
-    { id: 'p10', text: '蒟蒻果凍', completed: false, member: '全體' }
-  ]
+  todo: [],
+  packing: [],
+  shopping: []
 };
 
 const planningData = ref(JSON.parse(localStorage.getItem('okinawa_planning') || JSON.stringify(defaultPlanning)));
@@ -1343,48 +1218,11 @@ const subTitle = ref(localStorage.getItem('okinawa_sub_title') || '王姥姥進�
 const selectedDay = ref('9/25');
 
 const defaultScheduleItems = {
-  '9/25': [
-    { id: 's1', time: '20:50', title: '那霸機場', type: 'transport', typeLabel: '交通', location: 'Naha Airport', color: 'bg-blue-100 text-blue-600', note: 'IT 232 抵達沖繩，辦理入境。' },
-    { id: 's2', time: '21:50', title: '那霸機場站', type: 'transport', typeLabel: '交通', location: '那霸機場站', color: 'bg-blue-100 text-blue-600', note: '步行至國內線航廈 2 樓。' },
-    { id: 's3', time: '22:00', title: '搭乘單軌電車', type: 'transport', typeLabel: '交通', location: '美榮橋站', color: 'bg-blue-100 text-blue-600', note: '車資 ¥300，約 15 分鐘。' },
-    { id: 's4', time: '22:20', title: '里士滿那霸久茂地酒店', type: 'accommodation', typeLabel: '住宿', location: 'Richmond Hotel Naha Kumoji', color: 'bg-purple-100 text-purple-600', note: '步行約 5 分鐘抵達飯店 Check-in。' },
-    { id: 's5', time: '22:45', title: '國際通宵夜', type: 'food', typeLabel: '美食', location: '國際通', color: 'bg-orange-100 text-orange-600', note: '自由選擇暖暮拉麵或居酒屋。' },
-  ],
-  '9/26': [
-    { id: 's6', time: '09:20', title: '波上宮', type: 'sightseeing', typeLabel: '景點', location: 'Naminoue Shrine', color: 'bg-emerald-100 text-emerald-600', note: '參拜、購買御守、海灘拍照。' },
-    { id: 's7', time: '10:30', title: '第一牧志公設市場', type: 'food', typeLabel: '美食', location: 'Makishi Market', color: 'bg-orange-100 text-orange-600', note: '午餐推薦海鮮、天婦羅。' },
-    { id: 's8', time: '13:00', title: '搭乘計程車', type: 'transport', typeLabel: '交通', location: '新都心', color: 'bg-blue-100 text-blue-600', note: '前往新都心（車資約 ¥1,300）。' },
-    { id: 's9', time: '14:00', title: 'San-A Naha Main Place', type: 'sightseeing', typeLabel: '景點', location: 'San-A Naha Main Place', color: 'bg-emerald-100 text-emerald-600', note: '大型超市與日系百貨採買。' },
-    { id: 's10', time: '16:30', title: '國際通', type: 'sightseeing', typeLabel: '景點', location: '國際通', color: 'bg-emerald-100 text-emerald-600', note: '逛街、買伴手禮、逛藥妝店。' },
-    { id: 's11', time: '19:30', title: '國際通晚餐', type: 'food', typeLabel: '美食', location: '國際通', color: 'bg-orange-100 text-orange-600', note: '自由選擇晚餐。' },
-  ],
-  '9/27': [
-    { id: 's12', time: '09:00', title: '租車公司取車', type: 'transport', typeLabel: '交通', location: '沖繩縣那霸市牧志2-17-10', color: 'bg-blue-100 text-blue-600', note: 'ORIX 美榮橋站前 外語櫃檯。' },
-    { id: 's13', time: '09:30', title: '泊港漁市場', type: 'food', typeLabel: '美食', location: 'Tomari Iyumachi', color: 'bg-orange-100 text-orange-600', note: '海鮮早餐（推薦：生蠔、海膽燒）。' },
-    { id: 's14', time: '10:30', title: '漁師食堂 大盤振舞', type: 'food', typeLabel: '美食', location: 'Ryoshi Shokudo Obanburumai Sakana Daitoryo', color: 'bg-orange-100 text-orange-600', note: '超豪邁海鮮丼飯，就在漁市場附近。' },
-    { id: 's15', time: '12:00', title: 'San-A PARCO CITY', type: 'food', typeLabel: '美食', location: 'San-A PARCO CITY', color: 'bg-orange-100 text-orange-600', note: '午餐（無敵海景美食街）＋逛百貨。' },
-    { id: 's16', time: '16:00', title: '美國村', type: 'sightseeing', typeLabel: '景點', location: 'American Village', color: 'bg-emerald-100 text-emerald-600', note: '散步看夕陽、拍照（推薦：Sunset Beach）。' },
-    { id: 's17', time: '19:00', title: '琉球之牛燒肉', type: 'food', typeLabel: '美食', location: '琉球之牛', color: 'bg-orange-100 text-orange-600', note: '建議預約，或迴轉壽司市場。' },
-  ],
-  '9/28': [
-    { id: 's18', time: '07:30', title: '豬肉蛋飯糰 Potama', type: 'food', typeLabel: '美食', location: '豬肉蛋飯糰 Potama', color: 'bg-orange-100 text-orange-600', note: '外帶早餐（車上享用）。' },
-    { id: 's19', time: '08:45', title: '萬座毛', type: 'sightseeing', typeLabel: '景點', location: 'Manzamo', color: 'bg-emerald-100 text-emerald-600', note: '景點拍照、欣賞象鼻岩。' },
-    { id: 's20', time: '10:00', title: '道之驛許田', type: 'sightseeing', typeLabel: '景點', location: 'Kyoda Rest Area', color: 'bg-emerald-100 text-emerald-600', note: '購買優惠實體票（需現金）。' },
-    { id: 's21', time: '11:00', title: '名護漁港食堂', type: 'food', typeLabel: '美食', location: '名護漁港食堂', color: 'bg-orange-100 text-orange-600', note: '僅收現金，推鮪魚丼、漁師汁。' },
-    { id: 's22', time: '12:50', title: '古宇利島海洋塔', type: 'sightseeing', typeLabel: '景點', location: 'Kouri Ocean Tower', color: 'bg-emerald-100 text-emerald-600', note: '看 Tiffany 藍海景。' },
-    { id: 's23', time: '14:30', title: '美麗海水族館', type: 'sightseeing', typeLabel: '景點', location: 'Churaumi Aquarium', color: 'bg-emerald-100 text-emerald-600', note: '海豚秀、鯨鯊餵食秀、黑潮探險。' },
-    { id: 's24', time: '17:00', title: 'Shinmei Coffee', type: 'food', typeLabel: '美食', location: 'Shinmei Coffee Okinawa', color: 'bg-orange-100 text-orange-600', note: '在備瀨附近的特色咖啡廳，稍作休息。' },
-    { id: 's25', time: '17:45', title: '備瀨一線天', type: 'sightseeing', typeLabel: '景點', location: 'Bise no Warumi', color: 'bg-emerald-100 text-emerald-600', note: '神聖的海邊岩石裂縫秘境，鄰近水族館。' },
-    { id: 's26', time: '19:30', title: 'Yakiniku Kochan', type: 'food', typeLabel: '美食', location: 'Yakiniku Kochan', color: 'bg-orange-100 text-orange-600', note: '燒肉晚餐（建議預約）。' },
-  ],
-  '9/29': [
-    { id: 's27', time: '09:00', title: '玉泉洞 / 沖繩世界', type: 'sightseeing', typeLabel: '景點', location: 'Okinawa World', color: 'bg-emerald-100 text-emerald-600', note: '探索鐘乳石洞。' },
-    { id: 's28', time: '10:45', title: '瀨長島幸福鬆餅', type: 'food', typeLabel: '美食', location: '幸福鬆餅', color: 'bg-orange-100 text-orange-600', note: '直接去 32 號店鋪點餐外帶。' },
-    { id: 's29', time: '11:45', title: 'ASHIBINAA Outlet', type: 'sightseeing', typeLabel: '景點', location: 'ASHIBINAA Outlet', color: 'bg-emerald-100 text-emerald-600', note: '最後採買。' },
-    { id: 's30', time: '13:30', title: '豐崎還車', type: 'transport', typeLabel: '交通', location: '沖繩縣豐見城市豐崎1-1174', color: 'bg-blue-100 text-blue-600', note: 'ORIX 那霸機場 外語櫃檯。' },
-    { id: 's31', time: '14:30', title: '那霸機場', type: 'transport', typeLabel: '交通', location: '那霸機場', color: 'bg-blue-100 text-blue-600', note: '國內線航廈 2 樓最後採購伴手禮。' },
-    { id: 's32', time: '16:55', title: '搭機返台', type: 'transport', typeLabel: '交通', location: '那霸機場', color: 'bg-blue-100 text-blue-600', note: 'FD 231 返程。' },
-  ],
+  '9/25': [],
+  '9/26': [],
+  '9/27': [],
+  '9/28': [],
+  '9/29': []
 };
 
 const savedSchedule = localStorage.getItem('okinawa_schedule');
