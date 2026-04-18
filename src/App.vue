@@ -2758,17 +2758,17 @@ const countdownData = computed(() => {
             </button>
           </div>
 
-          <div class="flex gap-2">
+          <div class="flex gap-2 w-full">
             <input 
               v-model="newItemText"
               type="text" 
-              class="flex-grow p-4 bg-white rounded-2xl font-medium focus:outline-none focus:ring-2 focus:ring-okinawa-blue shadow-sm transition-all"
+              class="flex-grow min-w-0 w-full p-4 bg-white rounded-2xl font-medium focus:outline-none focus:ring-2 focus:ring-okinawa-blue shadow-sm transition-all"
               :placeholder="`新增${planningTab === 'todo' ? '待辦' : planningTab === 'packing' ? '行李' : '購物'}項目...`"
               @keyup.enter="addPlanningItem"
             >
             <button 
               @click="addPlanningItem"
-              class="p-4 bg-okinawa-blue text-white rounded-2xl shadow-lg active:scale-95 transition-all"
+              class="flex-shrink-0 flex items-center justify-center p-4 bg-okinawa-blue text-white rounded-2xl shadow-lg active:scale-95 transition-all"
             >
               <Plus class="w-6 h-6" />
             </button>
@@ -2899,7 +2899,7 @@ const countdownData = computed(() => {
           <a 
             href="https://maps.app.goo.gl/avALVgvqvztEzZNL8" 
             target="_blank"
-            class="flex items-center justify-center gap-3 w-full py-4 bg-gradient-to-br from-sky-400 to-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-transform"
+            class="flex items-center justify-center gap-3 w-full py-4 bg-gradient-to-br from-[#77aee0] to-[#5983c2] text-white rounded-2xl font-bold shadow-lg shadow-[#5983c2]/20 active:scale-95 transition-transform"
           >
             <MapPin class="w-5 h-5" />
             打開我的口袋名單
@@ -2908,7 +2908,7 @@ const countdownData = computed(() => {
           <!-- Gemini Button (Built-in) -->
           <button 
             @click="toolSubView = 'ai'"
-            class="flex items-center justify-center gap-3 w-full py-4 bg-gradient-to-r from-[#4285f4] via-[#9b72cb] to-[#d96570] text-white rounded-2xl font-bold shadow-lg shadow-purple-500/20 active:scale-95 transition-transform"
+            class="flex items-center justify-center gap-3 w-full py-4 bg-gradient-to-r from-[#709de6] via-[#b093d1] to-[#d68b92] text-white rounded-2xl font-bold shadow-lg shadow-[#b093d1]/20 active:scale-95 transition-transform"
           >
             <Sparkles class="w-5 h-5" />
             打開沖繩 AI 助手
@@ -2918,9 +2918,9 @@ const countdownData = computed(() => {
           <a 
             href="https://www.google.com/maps/search/駐車場/" 
             target="_blank"
-            class="flex items-center justify-center gap-3 w-full py-4 bg-gradient-to-br from-emerald-400 to-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform group"
+            class="flex items-center justify-center gap-3 w-full py-4 bg-gradient-to-r from-[#b3d17b] via-[#6eb898] to-[#599fa1] text-white rounded-2xl font-bold shadow-lg shadow-[#6eb898]/20 active:scale-95 transition-transform group"
           >
-            <div class="w-6 h-6 rounded flex items-center justify-center font-black text-sm bg-white text-emerald-600 shadow-sm group-hover:scale-110 transition-transform">P</div>
+            <div class="w-6 h-6 rounded flex items-center justify-center font-black text-sm bg-white text-[#6eb898] shadow-sm group-hover:scale-110 transition-transform">P</div>
             一鍵找附近停車位
           </a>
 
