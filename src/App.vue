@@ -955,57 +955,51 @@ const startBarcodeScanner = async () => {
   scannedResult.value = null;
   barcodeProductInfo.value = null;
   barcodeError.value = null;
-  isScanning.value = true;
-  
-  await nextTick();
-  
-  // Ensure the DOM element is actually available
-  const container = document.getElementById("barcode-reader");
-  if (!container) {
-    barcodeError.value = "掃描視窗初始化失敗";
-    isScanning.value = false;
-    return;
-  }
-  
-  // Wait a bit for the animation to settle
-  await new Promise(resolve => setTimeout(resolve, 300));
   
   try {
+    // 1. Check if camera is supported
+    const devices = await Html5Qrcode.getCameras();
+    if (!devices || devices.length === 0) {
+      throw new Error("找不到可用的相機。");
+    }
+
+    isScanning.value = true;
+    await nextTick();
+    
+    // Slight delay to allow DOM transition
+    await new Promise(r => setTimeout(r, 400));
+    
     barcodeScanner.value = new Html5Qrcode("barcode-reader");
     
-    // Config optimized for brightness and accuracy
+    // Try to find the back camera explicitly, or use environment
     const config = { 
       fps: 20, 
-      qrbox: { width: 280, height: 160 },
-      // High resolution helps with small barcodes and brightness
-      videoConstraints: {
-        facingMode: "environment",
-        width: { min: 640, ideal: 1280 },
-        height: { min: 480, ideal: 720 },
-        // Try to avoid excessive zooming which causes darkness
-        aspectRatio: { ideal: 1.7777777778 }
-      }
+      qrbox: { width: 260, height: 160 },
+      aspectRatio: 1.0,
+    };
+    
+    // Explicit constraints for better brightness/focus on mobile
+    const constraints = {
+      facingMode: "environment",
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
     };
     
     await barcodeScanner.value.start(
-      { facingMode: "environment" },
+      constraints,
       config,
       (decodedText) => {
-        if (navigator.vibrate) {
-          try { navigator.vibrate([50, 30, 50]); } catch(e) {}
-        }
+        if (navigator.vibrate) try { navigator.vibrate([50, 30]); } catch(e) {}
         stopBarcodeScanner();
         scannedResult.value = decodedText;
         lookupProduct(decodedText);
       },
-      (errorMessage) => {
-        // Suppress common noisy log errors
-      }
+      () => {} 
     );
-  } catch (err) {
-    console.error("Scanner failed to start", err);
-    barcodeError.value = "無法啟動相機。\n請確認瀏覽器權限，並嘗試點擊右上角「...」選擇用正式瀏覽器開啟。";
+  } catch (err: any) {
+    console.error("Scanner startup failed:", err);
     isScanning.value = false;
+    barcodeError.value = `無法啟動相機: ${err.message || "權限不足"}\n\n建議：如使用 LINE 內建連結，請點右上角三點選擇「在瀏覽器中開啟」以獲得完整相機權限。`;
   }
 };
 
@@ -1155,6 +1149,78 @@ const lookupProduct = async (code: string) => {
   } finally {
     barcodeLoading.value = false;
   }
+};
+
+const analyzeProductImage = async (base64Data: string) => {
+  barcodeLoading.value = true;
+  barcodeProductInfo.value = null;
+  barcodeError.value = null;
+  
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("API Key Missing");
+    
+    const ai = new GoogleGenAI({ apiKey });
+    
+    // Clean base64 data
+    const dataOnly = base64Data.split(',')[1];
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: {
+        parts: [
+          { text: "這是一張日本商品的條碼或包裝照片。請辨識該商品，找出條碼號碼（JAN Code），並搜尋該商品的品牌、品名、功效、成分等。若為藥妝請註明是否含類固醇。請以繁體中文 JSON 格式回覆。" },
+          { inlineData: { data: dataOnly, mimeType: "image/jpeg" } }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            type: { type: Type.STRING, enum: ["food", "drug"] },
+            brand: { type: Type.STRING },
+            name: { type: Type.STRING },
+            barcode: { type: Type.STRING },
+            description: { type: Type.STRING },
+            calories: { type: Type.STRING },
+            ingredients: { type: Type.STRING },
+            effects: { type: Type.STRING },
+            steroids_antibiotics: { type: Type.STRING },
+            features: { type: Type.ARRAY, items: { type: Type.STRING } }
+          },
+          required: ["type", "brand", "name", "barcode"]
+        },
+        tools: [{ googleSearch: {} }],
+        toolConfig: { includeServerSideToolInvocations: true }
+      }
+    });
+    
+    const result = JSON.parse(response.text || "{}");
+    if (result.name) {
+      barcodeProductInfo.value = result;
+      addToHistory(result);
+    } else {
+      throw new Error("無法從照片辨識商品");
+    }
+  } catch (err) {
+    console.error("Vision lookup failed:", err);
+    barcodeError.value = "照片辨識失敗。請嘗試手動輸入條碼，或拍攝更清晰的條碼圖片。";
+  } finally {
+    barcodeLoading.value = false;
+  }
+};
+
+const handleBarcodeImageUpload = (e: Event) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const base64 = event.target?.result as string;
+    analyzeProductImage(base64);
+  };
+  reader.readAsDataURL(file);
 };
 
 const handleAiImageUpload = (event: Event) => {
@@ -3540,7 +3606,6 @@ const countdownData = computed(() => {
             </div>
           </div>
 
-          <!-- Result View -->
           <div v-if="!isScanning && activeBarcodeTab === 'scan'" class="space-y-6">
             <div class="flex flex-col gap-4">
               <button 
@@ -3548,11 +3613,24 @@ const countdownData = computed(() => {
                 @click="startBarcodeScanner"
                 class="w-full py-8 bg-white border-2 border-dashed border-emerald-200 rounded-[32px] flex flex-col items-center gap-3 text-emerald-600 hover:bg-emerald-50 transition-all active:scale-95"
               >
-                <div class="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-                  <Camera class="w-6 h-6" />
+                <div class="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center">
+                  <Camera class="w-8 h-8" />
                 </div>
-                <span class="font-bold">開始掃描條碼</span>
+                <div class="text-center">
+                  <span class="font-bold text-lg block">開始掃描條碼</span>
+                  <span class="text-xs text-emerald-600/60 mt-1 text-center px-4">對準條碼即可自動辨識</span>
+                </div>
               </button>
+
+              <!-- Photo Backup Option -->
+              <label 
+                v-if="!barcodeLoading && !barcodeProductInfo" 
+                class="w-full py-4 bg-emerald-50 text-emerald-700 rounded-2xl flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all text-sm font-bold border border-emerald-100"
+              >
+                <input type="file" accept="image/*" capture="environment" class="hidden" @change="handleBarcodeImageUpload" />
+                <Sparkles class="w-4 h-4" />
+                掃不到？點此「拍照辨識」
+              </label>
 
               <!-- Manual Input Section -->
               <div v-if="!barcodeLoading && !barcodeProductInfo" class="flex items-center gap-3 px-2">
