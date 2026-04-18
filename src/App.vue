@@ -791,6 +791,12 @@ const removePlanningImage = async (item: any) => {
   const id = item.id ? item.id.toString() : Date.now().toString();
   await syncToFirebase('planning', id, { ...item, tab: planningTab.value });
   showToast('圖片已移除', 'info');
+  
+  // Close zoom if open
+  if (zoomedPlanningItem.value && zoomedPlanningItem.value.id === item.id) {
+    zoomedImageIndex.value = null;
+    zoomedPlanningItem.value = null;
+  }
 };
 
 const filteredPlanningData = computed(() => {
@@ -856,6 +862,7 @@ const aiLoading = ref(false);
 const aiMessages = reactive<{ role: 'user' | 'assistant', text: string, image?: string }[]>([]);
 const aiImageUpload = ref<HTMLInputElement | null>(null);
 const aiSelectedImage = ref<string | null>(null);
+const zoomedPlanningItem = ref<any>(null);
 
 const handleAiImageUpload = (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -2766,6 +2773,15 @@ const countdownData = computed(() => {
                 class="absolute inset-y-0 right-0 flex items-center gap-2 px-4 transition-all duration-200 z-10"
                 :class="swipedItemId === item.id ? 'opacity-100 translate-x-0 pointer-events-auto' : 'opacity-0 translate-x-full pointer-events-none'"
               >
+                <!-- Image Upload in Swipe (for Shopping) -->
+                <button 
+                  v-if="planningTab === 'shopping'"
+                  @click.stop="triggerPlanningImageUpload(item.id)"
+                  @touchstart.stop
+                  class="p-4 bg-emerald-500 text-white rounded-2xl shadow-lg active:scale-95 touch-manipulation"
+                >
+                  <Camera class="w-6 h-6" />
+                </button>
                 <button 
                   @click.stop="handleEditToggle(item)"
                   @touchstart.stop
@@ -2785,7 +2801,7 @@ const countdownData = computed(() => {
               <!-- Main Item Layer -->
               <div 
                 class="techo-card p-4 flex items-center gap-4 group cursor-pointer transition-transform duration-300 relative z-20"
-                :class="swipedItemId === item.id ? '-translate-x-[140px]' : 'translate-x-0'"
+                :class="swipedItemId === item.id ? (planningTab === 'shopping' ? '-translate-x-[200px]' : '-translate-x-[140px]') : 'translate-x-0'"
                 @click="togglePlanningItem(item)"
                 @touchstart="handleTouchStart($event, item.id, 'planning')"
                 @touchmove="handleTouchMove"
@@ -2813,8 +2829,8 @@ const countdownData = computed(() => {
                   </p>
                 </div>
 
-                <!-- Shopping Image Support -->
-                <div v-if="planningTab === 'shopping'" class="flex-shrink-0">
+                <!-- Shopping Image Indicator -->
+                <div v-if="planningTab === 'shopping' && item.image" class="flex-shrink-0">
                   <input 
                     :id="`planning-image-upload-${item.id}`"
                     type="file" 
@@ -2823,27 +2839,23 @@ const countdownData = computed(() => {
                     @change="handlePlanningImageUpload($event, item)"
                   >
                   
-                  <div @click.stop v-if="item.image" class="relative">
+                  <div @click.stop class="relative">
                     <img 
                       :src="item.image" 
-                      class="w-12 h-12 object-cover rounded-xl shadow-sm border border-techo-ink/10" 
+                      class="w-12 h-12 object-cover rounded-xl shadow-sm border border-techo-ink/10 active:scale-95 transition-transform" 
                       referrerPolicy="no-referrer"
-                      @click="zoomedImageIndex = 0; selectedHotel = { id: 'temp', images: [item.image], name: item.text } as any; openZoom(0)"
+                      @click="zoomedImageIndex = 0; selectedHotel = { id: 'temp', images: [item.image], name: item.text } as any; zoomedPlanningItem = item; openZoom(0)"
                     >
-                    <button 
-                      @click.stop="removePlanningImage(item)"
-                      class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center border-2 border-white shadow-sm"
-                    >
-                      <X class="w-3 h-3" />
-                    </button>
                   </div>
-                  <button 
-                    v-else
-                    @click.stop="triggerPlanningImageUpload(item.id)"
-                    class="w-10 h-10 bg-techo-ink/5 rounded-xl flex items-center justify-center text-techo-ink/20 hover:text-okinawa-blue transition-colors"
+                </div>
+                <div v-else-if="planningTab === 'shopping'" class="flex-shrink-0">
+                   <input 
+                    :id="`planning-image-upload-${item.id}`"
+                    type="file" 
+                    accept="image/*" 
+                    class="hidden" 
+                    @change="handlePlanningImageUpload($event, item)"
                   >
-                    <Camera class="w-5 h-5" />
-                  </button>
                 </div>
               </div>
             </div>
@@ -3336,8 +3348,19 @@ const countdownData = computed(() => {
           <p class="text-xs font-bold opacity-60 uppercase tracking-widest">{{ selectedHotel.name }}</p>
           <p class="text-lg font-bold">{{ zoomedImageIndex + 1 }} / {{ selectedHotel.images.length }}</p>
         </div>
-        <button @click="zoomedImageIndex = null" class="p-3 bg-white/10 text-white rounded-full hover:bg-white/20 transition-colors backdrop-blur-md">
+        <button @click="zoomedImageIndex = null; zoomedPlanningItem = null" class="p-3 bg-white/10 text-white rounded-full hover:bg-white/20 transition-colors backdrop-blur-md">
           <X class="w-8 h-8" />
+        </button>
+      </div>
+
+      <!-- Delete Action for Planning Items -->
+      <div v-if="zoomedPlanningItem" class="absolute top-6 left-6 z-20">
+        <button 
+          @click.stop="removePlanningImage(zoomedPlanningItem)"
+          class="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-transform"
+        >
+          <Trash2 class="w-4 h-4" />
+          移除圖片
         </button>
       </div>
 
