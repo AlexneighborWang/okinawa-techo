@@ -961,12 +961,27 @@ const startBarcodeScanner = async () => {
   
   try {
     barcodeScanner.value = new Html5Qrcode("barcode-reader");
-    const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+    // Optimized config for Barcodes (wider aspect ratio, higher fps)
+    const config = { 
+      fps: 20, 
+      qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+        const width = viewfinderWidth * 0.8;
+        const height = viewfinderHeight * 0.4;
+        return { width, height };
+      },
+      aspectRatio: 1.0,
+      experimentalFeatures: {
+        useBarCodeDetectorIfSupported: true
+      }
+    };
     
     await barcodeScanner.value.start(
       { facingMode: "environment" },
       config,
       (decodedText) => {
+        // Success feedback
+        if (navigator.vibrate) navigator.vibrate(50);
+        
         stopBarcodeScanner();
         scannedResult.value = decodedText;
         lookupProduct(decodedText);
@@ -995,6 +1010,18 @@ const stopBarcodeScanner = async () => {
 };
 
 const lookupProduct = async (code: string) => {
+  if (barcodeLoading.value) return;
+  
+  // 0. Check local history first to avoid unnecessary AI calls
+  const existingProduct = barcodeHistory.value.find(p => p.barcode === code) || 
+                          barcodeFavorites.value.find(p => p.barcode === code);
+  
+  if (existingProduct) {
+    barcodeProductInfo.value = existingProduct;
+    addToHistory(existingProduct);
+    return;
+  }
+
   barcodeLoading.value = true;
   barcodeProductInfo.value = null;
   barcodeError.value = null;
@@ -1051,10 +1078,14 @@ const lookupProduct = async (code: string) => {
     }
 
     // 3. AI 二次加工
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("Gemini API key is not configured.");
+    }
+    const ai = new GoogleGenAI({ apiKey });
     let prompt = "";
     
-    // Unified Schema that handles both Food and Drug
+    // Simplified Schema for faster AI response
     const responseSchema = {
       type: Type.OBJECT,
       properties: {
@@ -1062,23 +1093,20 @@ const lookupProduct = async (code: string) => {
         brand: { type: Type.STRING },
         name: { type: Type.STRING },
         description: { type: Type.STRING },
-        // Common/Flexible fields
-        calories: { type: Type.STRING, description: "熱量資訊 (食品專用)" },
-        ingredients: { type: Type.STRING, description: "主要成分 (食品或藥妝成分)" },
-        effects: { type: Type.STRING, description: "核心功效 (藥妝或保健品專用)" },
-        steroids_antibiotics: { type: Type.STRING, description: "是否含類固醇/抗生素 (是/否/未知) (藥妝專用)" },
-        features: { type: Type.ARRAY, items: { type: Type.STRING }, description: "商品特點列表" }
+        calories: { type: Type.STRING },
+        ingredients: { type: Type.STRING },
+        effects: { type: Type.STRING },
+        steroids_antibiotics: { type: Type.STRING },
+        features: { type: Type.ARRAY, items: { type: Type.STRING } }
       },
       required: ["type", "brand", "name", "description"]
     };
 
-    prompt = `這是一項來自日本的條碼商品（條碼 ${code}）。
-${rawProductData ? '抓取到的原始資料：' + rawProductData : '目前無此商品的直接資料，請利用 Google Search 搜尋條碼 ' + code + ' 對應的日本商品資訊。'}
+    prompt = `條碼: ${code}
+原始資料: ${rawProductData || '無，請使用 Google 搜尋'}
 
-請根據資料（或者是你搜尋到的結果）判定這項商品是「食品 (food)」還是「藥妝/日常用品 (drug)」。
-1. 如果是食品：請務必提供熱量 (calories) 與成分 (ingredients)。
-2. 如果是藥妝/保健品：請提供核心功效 (effects) 與判斷是否含「類固醇或抗生素」(steroids_antibiotics)，並列出商品特點。
-請翻譯為繁體中文。`;
+請判定為 food 或 drug 並翻譯為繁體中文。如果是藥妝請註明是否含類固醇/抗生素。
+輸出 JSON 格式。`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -3469,9 +3497,17 @@ const countdownData = computed(() => {
 
           <!-- Scanner View -->
           <div v-show="isScanning && activeBarcodeTab === 'scan'" class="techo-card overflow-hidden">
-            <div id="barcode-reader" class="w-full aspect-square bg-black"></div>
+            <div class="relative w-full aspect-square bg-black">
+              <div id="barcode-reader" class="w-full h-full"></div>
+              <!-- Scan Overlay -->
+              <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <div class="w-[80%] h-[40%] border-2 border-emerald-500/50 rounded-lg relative overflow-hidden">
+                  <div class="absolute inset-x-0 h-0.5 bg-emerald-500 shadow-[0_0_10px_#10b981] animate-scan-line"></div>
+                </div>
+              </div>
+            </div>
             <div class="p-6 text-center">
-              <p class="text-sm font-medium text-techo-ink/60 mb-4">請將條碼放在框內掃描</p>
+              <p class="text-sm font-medium text-techo-ink/60 mb-4">請將條碼對準框框垂直或水平掃描</p>
               <button 
                 @click="stopBarcodeScanner"
                 class="w-full py-4 bg-techo-ink/5 text-techo-ink font-bold rounded-2xl active:scale-95 transition-all text-sm"
@@ -3529,7 +3565,14 @@ const countdownData = computed(() => {
               <div>
                 <p class="font-bold text-lg">正在搜尋商品資料...</p>
                 <p class="text-xs text-techo-ink/40 mt-1">串接 Open Food Facts 與 Gemini AI</p>
+                <p class="text-[10px] text-techo-ink/20 mt-4">搜尋時間約需 10-20 秒，請稍候...</p>
               </div>
+              <button 
+                @click="barcodeLoading = false; barcodeError = '已取消搜尋'"
+                class="mt-4 px-6 py-2 bg-techo-ink/5 text-techo-ink/40 text-xs font-bold rounded-xl active:scale-95 transition-transform"
+              >
+                取消搜尋
+              </button>
             </div>
 
             <!-- Error State -->
@@ -4150,7 +4193,7 @@ const countdownData = computed(() => {
           <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>1.</span> <span>絕不表現不耐煩的態度</span></p>
           <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>2.</span> <span>絕不對任何行程指手畫腳</span></p>
           <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>3.</span> <span>絕不擅自消失</span></p>
-          <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>4.</span> <span>該花錢就花錢要省回家再省</span></p>
+          <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>4.</span> <span>該花就花要省回家再省</span></p>
           <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>5.</span> <span>該休息就休息累了就說</span></p>
           <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>6.</span> <span>有想逛、想看、想吃的絕對要說</span></p>
           <p class="text-[18px] font-bold text-okinawa-blue flex gap-3"><span>7.</span> <span>開開心心出遊 平平安安回家</span></p>
@@ -4175,6 +4218,16 @@ const countdownData = computed(() => {
 </template>
 
 <style>
+@keyframes scan-line {
+  0% { top: 0% }
+  50% { top: 100% }
+  100% { top: 0% }
+}
+
+.animate-scan-line {
+  animation: scan-line 2s infinite ease-in-out;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
