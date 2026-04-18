@@ -959,34 +959,38 @@ const startBarcodeScanner = async () => {
   
   await nextTick();
   
+  // Use a slight delay to ensure the DOM is ready on slower mobile devices
+  await new Promise(resolve => setTimeout(resolve, 300));
+  
   try {
     barcodeScanner.value = new Html5Qrcode("barcode-reader");
-    // Safer config for mobile compatibility
+    
+    // Most compatible config for mobile cameras
     const config = { 
-      fps: 15, 
-      qrbox: { width: 280, height: 150 },
-      aspectRatio: 1.0,
-      experimentalFeatures: {
-        useBarCodeDetectorIfSupported: true
-      }
+      fps: 10, 
+      qrbox: { width: 260, height: 160 },
+      // Don't force ratio, let the hardware decide
     };
     
     await barcodeScanner.value.start(
       { facingMode: "environment" },
       config,
       (decodedText) => {
-        // Success feedback
-        if (navigator.vibrate) try { navigator.vibrate(50); } catch(e) {}
-        
+        if (navigator.vibrate) {
+          try { navigator.vibrate(50); } catch(e) {}
+        }
         stopBarcodeScanner();
         scannedResult.value = decodedText;
         lookupProduct(decodedText);
       },
-      () => {}
+      (error) => {
+        // Log subtle errors to console, don't show to user unless critical
+        if (typeof error === 'string' && error.includes('NotFoundException')) return;
+      }
     );
   } catch (err) {
     console.error("Scanner failed to start", err);
-    barcodeError.value = "無法啟動相機。請確認已開啟瀏覽器相機權限，若在 LINE 或其他內建瀏覽器中開啟，請嘗試使用 Safari 或 Chrome 正式版。";
+    barcodeError.value = "無法啟動相機。原因可能為：\n1. 權限未開放\n2. 您正在使用 LINE 等程式內建瀏覽器 (建議點擊右上角三點選擇「在瀏覽器中開啟」)\n3. 系統限制 (如省電模式或暫存已滿)";
     isScanning.value = false;
   }
 };
@@ -1022,8 +1026,8 @@ const lookupProduct = async (code: string) => {
   barcodeProductInfo.value = null;
   barcodeError.value = null;
   
-  // Timeout wrapper for fetch
-  const fetchWithTimeout = async (url: string, options: any = {}, timeout = 5000) => {
+  // Timeout wrapper for fetch - Increased to 25s for mobile stability
+  const fetchWithTimeout = async (url: string, options: any = {}, timeout = 25000) => {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
     try {
