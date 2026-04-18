@@ -754,6 +754,45 @@ const deletePlanningItem = async (tab: string, id: any) => {
   await deleteFromFirebase('planning', id.toString());
 };
 
+const triggerPlanningImageUpload = (id: string) => {
+  const input = document.getElementById(`planning-image-upload-${id}`);
+  if (input) input.click();
+};
+
+const handlePlanningImageUpload = async (event: Event, item: any) => {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files[0]) {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const rawResult = e.target?.result as string;
+      try {
+        const compressedResult = await compressImage(rawResult);
+        item.image = compressedResult;
+        savePlanning();
+        
+        // Sync to Firebase
+        const id = item.id ? item.id.toString() : Date.now().toString();
+        await syncToFirebase('planning', id, { ...item, tab: planningTab.value });
+        showToast('圖片上傳成功', 'success');
+      } catch (err) {
+        console.error('Image upload failed:', err);
+        showToast('上傳失敗，圖片可能太大', 'error');
+      }
+    };
+    reader.readAsDataURL(target.files[0]);
+  }
+};
+
+const removePlanningImage = async (item: any) => {
+  delete item.image;
+  savePlanning();
+  
+  // Sync to Firebase
+  const id = item.id ? item.id.toString() : Date.now().toString();
+  await syncToFirebase('planning', id, { ...item, tab: planningTab.value });
+  showToast('圖片已移除', 'info');
+};
+
 const filteredPlanningData = computed(() => {
   const data = planningData.value[planningTab.value];
   
@@ -2772,6 +2811,39 @@ const countdownData = computed(() => {
                       {{ item.completedBy }}
                     </span>
                   </p>
+                </div>
+
+                <!-- Shopping Image Support -->
+                <div v-if="planningTab === 'shopping'" class="flex-shrink-0">
+                  <input 
+                    :id="`planning-image-upload-${item.id}`"
+                    type="file" 
+                    accept="image/*" 
+                    class="hidden" 
+                    @change="handlePlanningImageUpload($event, item)"
+                  >
+                  
+                  <div @click.stop v-if="item.image" class="relative">
+                    <img 
+                      :src="item.image" 
+                      class="w-12 h-12 object-cover rounded-xl shadow-sm border border-techo-ink/10" 
+                      referrerPolicy="no-referrer"
+                      @click="zoomedImageIndex = 0; selectedHotel = { id: 'temp', images: [item.image], name: item.text } as any; openZoom(0)"
+                    >
+                    <button 
+                      @click.stop="removePlanningImage(item)"
+                      class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center border-2 border-white shadow-sm"
+                    >
+                      <X class="w-3 h-3" />
+                    </button>
+                  </div>
+                  <button 
+                    v-else
+                    @click.stop="triggerPlanningImageUpload(item.id)"
+                    class="w-10 h-10 bg-techo-ink/5 rounded-xl flex items-center justify-center text-techo-ink/20 hover:text-okinawa-blue transition-colors"
+                  >
+                    <Camera class="w-5 h-5" />
+                  </button>
                 </div>
               </div>
             </div>
