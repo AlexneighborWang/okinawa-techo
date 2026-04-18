@@ -1470,13 +1470,13 @@ const loginWithGoogle = async () => {
   isLoggingIn.value = true;
   const provider = new GoogleAuthProvider();
   
-  // Safety timeout in case popup hangs silently (common in in-app browsers)
+  // Safety timeout in case popup hangs silently (common in in-app browsers or iframes)
   const timeoutId = setTimeout(() => {
     if (isLoggingIn.value) {
       isLoggingIn.value = false;
-      showToast('登入請求超時，請確認是否有彈出視窗被攔截，或嘗試使用其他瀏覽器。', 'error');
+      showToast('登入尚未收到回應。若您已完成授權，請「重新整理網頁」或改用「在新分頁中開啟」以完成登入！', 'error');
     }
-  }, 30000);
+  }, 12000);
 
   try {
     await signInWithPopup(auth, provider);
@@ -1782,6 +1782,15 @@ const countdownData = computed(() => {
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5" />
             <span>使用 Google 登入</span>
           </template>
+        </button>
+        
+        <!-- PWA Reload Helper -->
+        <button 
+          v-if="isLoggingIn" 
+          @click="() => window.location.reload()"
+          class="mt-6 text-sm text-techo-ink/50 underline hover:text-okinawa-blue transition-colors font-medium active:bg-transparent"
+        >
+          已完成授權但畫面卡住？點此重新載入
         </button>
         <p class="text-[10px] text-techo-ink/40 mt-6 uppercase tracking-widest">Securely powered by Firebase</p>
       </div>
