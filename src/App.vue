@@ -959,17 +959,32 @@ const startBarcodeScanner = async () => {
   
   await nextTick();
   
-  // Use a slight delay to ensure the DOM is ready on slower mobile devices
+  // Ensure the DOM element is actually available
+  const container = document.getElementById("barcode-reader");
+  if (!container) {
+    barcodeError.value = "掃描視窗初始化失敗";
+    isScanning.value = false;
+    return;
+  }
+  
+  // Wait a bit for the animation to settle
   await new Promise(resolve => setTimeout(resolve, 300));
   
   try {
     barcodeScanner.value = new Html5Qrcode("barcode-reader");
     
-    // Most compatible config for mobile cameras
+    // Config optimized for brightness and accuracy
     const config = { 
-      fps: 10, 
-      qrbox: { width: 260, height: 160 },
-      // Don't force ratio, let the hardware decide
+      fps: 20, 
+      qrbox: { width: 280, height: 160 },
+      // High resolution helps with small barcodes and brightness
+      videoConstraints: {
+        facingMode: "environment",
+        width: { min: 640, ideal: 1280 },
+        height: { min: 480, ideal: 720 },
+        // Try to avoid excessive zooming which causes darkness
+        aspectRatio: { ideal: 1.7777777778 }
+      }
     };
     
     await barcodeScanner.value.start(
@@ -977,20 +992,19 @@ const startBarcodeScanner = async () => {
       config,
       (decodedText) => {
         if (navigator.vibrate) {
-          try { navigator.vibrate(50); } catch(e) {}
+          try { navigator.vibrate([50, 30, 50]); } catch(e) {}
         }
         stopBarcodeScanner();
         scannedResult.value = decodedText;
         lookupProduct(decodedText);
       },
-      (error) => {
-        // Log subtle errors to console, don't show to user unless critical
-        if (typeof error === 'string' && error.includes('NotFoundException')) return;
+      (errorMessage) => {
+        // Suppress common noisy log errors
       }
     );
   } catch (err) {
     console.error("Scanner failed to start", err);
-    barcodeError.value = "無法啟動相機。原因可能為：\n1. 權限未開放\n2. 您正在使用 LINE 等程式內建瀏覽器 (建議點擊右上角三點選擇「在瀏覽器中開啟」)\n3. 系統限制 (如省電模式或暫存已滿)";
+    barcodeError.value = "無法啟動相機。\n請確認瀏覽器權限，並嘗試點擊右上角「...」選擇用正式瀏覽器開啟。";
     isScanning.value = false;
   }
 };
@@ -1102,15 +1116,18 @@ const lookupProduct = async (code: string) => {
       required: ["type", "brand", "name", "description"]
     };
 
-    prompt = `辨識這項日本商品的條碼: ${code}。
-原始參考內容: ${rawProductData || '無'}
+    prompt = `這是一項來自日本的條碼商品。
+條碼編號：${code}
+初步掃描資訊：${rawProductData || '無'}
 
-任務流程:
-1. 利用 Google 搜尋工具查詢該條碼對應的日本商品詳細資訊（包含品牌、品名、用途）。
-2. 判定類型為「food」或「drug」。
-3. 將所有描述、功效、成分等資訊翻譯為繁體中文。
-4. 如果是藥妝，務必分析是否含「類固醇」或「抗生素」。
-5. 最後輸出 JSON 格式。`;
+請執行以下步驟：
+1. 作為一名日本專業代購專家，請利用 Google 搜尋此條碼 ${code} 的日本官方商品名稱、品牌及正確描述。
+2. 判斷該商品屬於「food (食品/飲料)」還是「drug (藥妝/保養品/生活用品)」。
+3. 將資訊翻譯成精確的繁體中文。
+4. 若為藥妝或保健品，請特別註明其核心功效及是否含「類固醇」或「抗生素」。
+5. 如果找不到具體資料，請根據條碼前三位 (490/450) 確認為日本商品，並推測其可能的產品類別後回覆，不要直接說查無資料。
+
+輸出必須符合 JSON 格式。`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
