@@ -693,24 +693,31 @@ const saveEditPlanning = async (item: any) => {
 
 const swipedItemId = ref<string | null>(null);
 const swipedExpenseId = ref<string | null>(null);
-let touchStartX = 0;
-let touchCurrentX = 0;
+let startX = 0;
+let currentX = 0;
+let isDragging = false;
 
-const handleTouchStart = (e: TouchEvent, id: string, type: 'planning' | 'expense' = 'planning') => {
+const handleDragStart = (e: TouchEvent | MouseEvent, id: string, type: 'planning' | 'expense' = 'planning') => {
   const activeId = type === 'planning' ? swipedItemId : swipedExpenseId;
   if (activeId.value && activeId.value !== id) {
     activeId.value = null;
   }
-  touchStartX = e.touches[0].clientX;
-  touchCurrentX = touchStartX;
+  
+  isDragging = true;
+  startX = (e instanceof TouchEvent) ? e.touches[0].clientX : e.clientX;
+  currentX = startX;
 };
 
-const handleTouchMove = (e: TouchEvent) => {
-  touchCurrentX = e.touches[0].clientX;
+const handleDragMove = (e: TouchEvent | MouseEvent) => {
+  if (!isDragging) return;
+  currentX = (e instanceof TouchEvent) ? e.touches[0].clientX : e.clientX;
 };
 
-const handleTouchEnd = (id: string, type: 'planning' | 'expense' = 'planning') => {
-  const diff = touchCurrentX - touchStartX;
+const handleDragEnd = (id: string, type: 'planning' | 'expense' = 'planning') => {
+  if (!isDragging) return;
+  isDragging = false;
+  
+  const diff = currentX - startX;
   const activeId = type === 'planning' ? swipedItemId : swipedExpenseId;
   if (diff < -50) {
     activeId.value = id;
@@ -784,6 +791,8 @@ const handlePlanningImageUpload = async (event: Event, item: any) => {
 };
 
 const removePlanningImage = async (item: any) => {
+  if (!confirm('確定要移除此購物商品圖片嗎？')) return;
+  
   delete item.image;
   savePlanning();
   
@@ -796,6 +805,9 @@ const removePlanningImage = async (item: any) => {
   if (zoomedPlanningItem.value && zoomedPlanningItem.value.id === item.id) {
     zoomedImageIndex.value = null;
     zoomedPlanningItem.value = null;
+    if (selectedHotel.value?.id === 'temp') {
+      selectedHotel.value = null;
+    }
   }
 };
 
@@ -2631,9 +2643,13 @@ const countdownData = computed(() => {
                 class="techo-card p-4 flex justify-between items-center transition-transform duration-300 relative z-20"
                 :class="swipedExpenseId === expense.id ? '-translate-x-[140px]' : 'translate-x-0'"
                 @click="swipedExpenseId ? swipedExpenseId = null : null"
-                @touchstart="handleTouchStart($event, expense.id, 'expense')"
-                @touchmove="handleTouchMove"
-                @touchend="handleTouchEnd(expense.id, 'expense')"
+                @touchstart="handleDragStart($event, expense.id, 'expense')"
+                @touchmove="handleDragMove"
+                @touchend="handleDragEnd(expense.id, 'expense')"
+                @mousedown="handleDragStart($event, expense.id, 'expense')"
+                @mousemove="handleDragMove"
+                @mouseup="handleDragEnd(expense.id, 'expense')"
+                @mouseleave="isDragging ? handleDragEnd(expense.id, 'expense') : null"
               >
                 <div class="flex items-center gap-3">
                   <div class="w-10 h-10 bg-okinawa-blue/10 rounded-full flex items-center justify-center text-okinawa-blue">
@@ -2803,9 +2819,13 @@ const countdownData = computed(() => {
                 class="techo-card p-4 flex items-center gap-4 group cursor-pointer transition-transform duration-300 relative z-20"
                 :class="swipedItemId === item.id ? (planningTab === 'shopping' ? '-translate-x-[200px]' : '-translate-x-[140px]') : 'translate-x-0'"
                 @click="togglePlanningItem(item)"
-                @touchstart="handleTouchStart($event, item.id, 'planning')"
-                @touchmove="handleTouchMove"
-                @touchend="handleTouchEnd(item.id, 'planning')"
+                @touchstart="handleDragStart($event, item.id, 'planning')"
+                @touchmove="handleDragMove"
+                @touchend="handleDragEnd(item.id, 'planning')"
+                @mousedown="handleDragStart($event, item.id, 'planning')"
+                @mousemove="handleDragMove"
+                @mouseup="handleDragEnd(item.id, 'planning')"
+                @mouseleave="isDragging ? handleDragEnd(item.id, 'planning') : null"
               >
                 <div class="text-okinawa-blue">
                   <CheckCircle2 v-if="item.completed" class="w-6 h-6" />
@@ -3344,24 +3364,41 @@ const countdownData = computed(() => {
     <!-- Image Zoom Modal (Swipable) -->
     <div v-if="zoomedImageIndex !== null && selectedHotel" class="fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex flex-col animate-in fade-in duration-300">
       <div class="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10 bg-gradient-to-b from-black/60 to-transparent">
-        <div class="text-white">
-          <p class="text-xs font-bold opacity-60 uppercase tracking-widest">{{ selectedHotel.name }}</p>
-          <p class="text-lg font-bold">{{ zoomedImageIndex + 1 }} / {{ selectedHotel.images.length }}</p>
-        </div>
-        <button @click="zoomedImageIndex = null; zoomedPlanningItem = null" class="p-3 bg-white/10 text-white rounded-full hover:bg-white/20 transition-colors backdrop-blur-md">
-          <X class="w-8 h-8" />
-        </button>
-      </div>
+        <div class="flex items-center gap-4">
+          <!-- Item/Hotel Info -->
+          <div class="text-white">
+            <p class="text-xs font-bold opacity-60 uppercase tracking-widest">{{ selectedHotel.name }}</p>
+            <p class="text-lg font-bold">{{ zoomedImageIndex + 1 }} / {{ selectedHotel.images.length }}</p>
+          </div>
 
-      <!-- Delete Action for Planning Items -->
-      <div v-if="zoomedPlanningItem" class="absolute top-6 left-6 z-20">
-        <button 
-          @click.stop="removePlanningImage(zoomedPlanningItem)"
-          class="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-transform"
-        >
-          <Trash2 class="w-4 h-4" />
-          移除圖片
-        </button>
+          <!-- Delete Action for Planning Items -->
+          <button 
+            v-if="zoomedPlanningItem"
+            @click.stop="removePlanningImage(zoomedPlanningItem)"
+            class="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-red-500 text-white rounded-xl font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-transform"
+          >
+            <Trash2 class="w-4 h-4" />
+            移除圖片
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <!-- Mobile Delete Icon (Shows on small screens) -->
+          <button 
+            v-if="zoomedPlanningItem"
+            @click.stop="removePlanningImage(zoomedPlanningItem)"
+            class="sm:hidden p-3 bg-red-500 text-white rounded-full shadow-lg active:scale-95 transition-transform"
+          >
+            <Trash2 class="w-6 h-6" />
+          </button>
+
+          <button 
+            @click="zoomedImageIndex = null; zoomedPlanningItem = null; if(selectedHotel?.id === 'temp') selectedHotel = null" 
+            class="p-3 bg-white/10 text-white rounded-full hover:bg-white/20 transition-colors backdrop-blur-md"
+          >
+            <X class="w-8 h-8" />
+          </button>
+        </div>
       </div>
 
       <div 
