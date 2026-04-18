@@ -56,8 +56,14 @@ import {
   Bus,
   LifeBuoy,
   Building2,
-  Sparkles
+  Sparkles,
+  Barcode,
+  Scan,
+  Star,
+  History,
+  Search
 } from 'lucide-vue-next';
+import { Html5Qrcode } from 'html5-qrcode';
 import { GoogleGenAI, Type } from "@google/genai";
 import { db, auth } from './firebase';
 import { 
@@ -875,6 +881,232 @@ const aiMessages = reactive<{ role: 'user' | 'assistant', text: string, image?: 
 const aiImageUpload = ref<HTMLInputElement | null>(null);
 const aiSelectedImage = ref<string | null>(null);
 const zoomedPlanningItem = ref<any>(null);
+
+// Barcode Logic
+const barcodeScanner = ref<Html5Qrcode | null>(null);
+const isScanning = ref(false);
+const scannedResult = ref<string | null>(null);
+const barcodeProductInfo = ref<any>(null);
+const barcodeLoading = ref(false);
+const barcodeError = ref<string | null>(null);
+const manualBarcode = ref('');
+const barcodeHistory = ref<any[]>(JSON.parse(localStorage.getItem('okinawa_barcode_history') || '[]'));
+const barcodeFavorites = ref<any[]>(JSON.parse(localStorage.getItem('okinawa_barcode_favorites') || '[]'));
+
+watch(barcodeHistory, (newVal) => {
+  localStorage.setItem('okinawa_barcode_history', JSON.stringify(newVal));
+}, { deep: true });
+
+watch(barcodeFavorites, (newVal) => {
+  localStorage.setItem('okinawa_barcode_favorites', JSON.stringify(newVal));
+}, { deep: true });
+
+const toggleFavorite = (product: any) => {
+  const index = barcodeFavorites.value.findIndex(p => p.barcode === product.barcode);
+  if (index !== -1) {
+    barcodeFavorites.value.splice(index, 1);
+    showToast('已從收藏移除', 'info');
+  } else {
+    barcodeFavorites.value.unshift({ ...product, favoritedAt: Date.now() });
+    showToast('已加入收藏', 'success');
+  }
+};
+
+const isFavorite = (barcode: string) => {
+  return barcodeFavorites.value.some(p => p.barcode === barcode);
+};
+
+const addToHistory = (product: any) => {
+  // Remove existing entry if same barcode
+  const index = barcodeHistory.value.findIndex(p => p.barcode === product.barcode);
+  if (index !== -1) {
+    barcodeHistory.value.splice(index, 1);
+  }
+  // Add to front
+  barcodeHistory.value.unshift({ ...product, scannedAt: Date.now() });
+  // Limit history size to 20
+  if (barcodeHistory.value.length > 20) {
+    barcodeHistory.value.pop();
+  }
+};
+
+const clearHistory = () => {
+  barcodeHistory.value = [];
+  showToast('歷史紀錄已清除', 'info');
+};
+
+const activeBarcodeTab = ref<any>('scan'); // scan, history, favorites
+
+const loadProductFromHistory = (product: any) => {
+  barcodeProductInfo.value = product;
+  activeBarcodeTab.value = 'scan';
+};
+
+const handleManualLookup = () => {
+  if (!manualBarcode.value || manualBarcode.value.length < 8) {
+    showToast('請輸入正確的條碼格式', 'error');
+    return;
+  }
+  lookupProduct(manualBarcode.value);
+  manualBarcode.value = '';
+};
+
+const startBarcodeScanner = async () => {
+  scannedResult.value = null;
+  barcodeProductInfo.value = null;
+  barcodeError.value = null;
+  isScanning.value = true;
+  
+  await nextTick();
+  
+  try {
+    barcodeScanner.value = new Html5Qrcode("barcode-reader");
+    const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+    
+    await barcodeScanner.value.start(
+      { facingMode: "environment" },
+      config,
+      (decodedText) => {
+        stopBarcodeScanner();
+        scannedResult.value = decodedText;
+        lookupProduct(decodedText);
+      },
+      () => {}
+    );
+  } catch (err) {
+    console.error("Scanner failed to start", err);
+    barcodeError.value = "無法啟動相機，請檢查權限。";
+    isScanning.value = false;
+  }
+};
+
+const stopBarcodeScanner = async () => {
+  if (barcodeScanner.value) {
+    try {
+      if (barcodeScanner.value.isScanning) {
+        await barcodeScanner.value.stop();
+      }
+    } catch (err) {
+      console.error("Failed to stop scanner", err);
+    }
+    barcodeScanner.value = null;
+  }
+  isScanning.value = false;
+};
+
+const lookupProduct = async (code: string) => {
+  barcodeLoading.value = true;
+  barcodeProductInfo.value = null;
+  barcodeError.value = null;
+  
+  // Timeout wrapper for fetch
+  const fetchWithTimeout = async (url: string, options: any = {}, timeout = 5000) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(id);
+      return response;
+    } catch (e) {
+      clearTimeout(id);
+      throw e;
+    }
+  };
+
+  try {
+    let rawProductData = "";
+    let isFood = false;
+
+    // 1. Try Open Food Facts
+    try {
+      const offResponse = await fetchWithTimeout(`https://world.openfoodfacts.org/api/v0/product/${code}.json`);
+      if (offResponse.ok) {
+        const offData = await offResponse.json();
+        if (offData.status === 1) {
+          isFood = true;
+          const p = offData.product;
+          rawProductData = `品名: ${p.product_name || '未知'}\n品牌: ${p.brands || '未知'}\n成分: ${p.ingredients_text || '無資料'}\n熱量: ${p.nutriments?.energy_kcal ? p.nutriments.energy_kcal + ' kcal/100g' : '未知'}`;
+        }
+      }
+    } catch(e) {
+      console.warn("OFF lookup failed", e);
+    }
+
+    // 2. Fallback to Yahoo Japan
+    if (!isFood) {
+      try {
+        const yahooAppId = (import.meta as any).env.VITE_YAHOO_CLIENT_ID;
+        if (yahooAppId) {
+          const yReq = await fetchWithTimeout(`https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch?appid=${yahooAppId}&jan=${code}`);
+          if (yReq.ok) {
+            const yData = await yReq.json();
+            if (yData.hits && yData.hits.length > 0) {
+              rawProductData = `商品名: ${yData.hits[0].name}\n描述: ${yData.hits[0].description}`;
+            }
+          }
+        }
+      } catch(e) {
+        console.warn("Yahoo lookup failed", e);
+      }
+    }
+
+    // 3. AI 二次加工
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    let prompt = "";
+    
+    // Unified Schema that handles both Food and Drug
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        type: { type: Type.STRING, enum: ["food", "drug"] },
+        brand: { type: Type.STRING },
+        name: { type: Type.STRING },
+        description: { type: Type.STRING },
+        // Common/Flexible fields
+        calories: { type: Type.STRING, description: "熱量資訊 (食品專用)" },
+        ingredients: { type: Type.STRING, description: "主要成分 (食品或藥妝成分)" },
+        effects: { type: Type.STRING, description: "核心功效 (藥妝或保健品專用)" },
+        steroids_antibiotics: { type: Type.STRING, description: "是否含類固醇/抗生素 (是/否/未知) (藥妝專用)" },
+        features: { type: Type.ARRAY, items: { type: Type.STRING }, description: "商品特點列表" }
+      },
+      required: ["type", "brand", "name", "description"]
+    };
+
+    prompt = `這是一項來自日本的條碼商品（條碼 ${code}）。
+${rawProductData ? '抓取到的原始資料：' + rawProductData : '目前無此商品的直接資料，請利用 Google Search 搜尋條碼 ' + code + ' 對應的日本商品資訊。'}
+
+請根據資料（或者是你搜尋到的結果）判定這項商品是「食品 (food)」還是「藥妝/日常用品 (drug)」。
+1. 如果是食品：請務必提供熱量 (calories) 與成分 (ingredients)。
+2. 如果是藥妝/保健品：請提供核心功效 (effects) 與判斷是否含「類固醇或抗生素」(steroids_antibiotics)，並列出商品特點。
+請翻譯為繁體中文。`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: { 
+        responseMimeType: "application/json",
+        responseSchema: responseSchema,
+        tools: [{ googleSearch: {} }],
+        toolConfig: { includeServerSideToolInvocations: true }
+      }
+    });
+
+    const parsedData = JSON.parse(response.text || "{}");
+    console.log("AI Parsed Data:", parsedData);
+    
+    if (!parsedData.name || parsedData.name === "未知") {
+      throw new Error("AI could not identify product");
+    }
+
+    barcodeProductInfo.value = { ...parsedData, barcode: code };
+    addToHistory(barcodeProductInfo.value);
+  } catch (err) {
+    console.error("Lookup failed:", err);
+    barcodeError.value = "查無此商品資訊或 AI 解析失敗。請確認條碼是否正確。";
+  } finally {
+    barcodeLoading.value = false;
+  }
+};
 
 const handleAiImageUpload = (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -2896,7 +3128,7 @@ const countdownData = computed(() => {
           <a 
             href="https://maps.app.goo.gl/avALVgvqvztEzZNL8" 
             target="_blank"
-            class="flex items-center justify-center gap-3 w-full py-4 bg-emerald-green text-white rounded-2xl font-bold shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform"
+            class="flex items-center justify-center gap-3 w-full py-4 bg-gradient-to-br from-sky-400 to-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-transform"
           >
             <MapPin class="w-5 h-5" />
             打開我的口袋名單
@@ -2909,6 +3141,15 @@ const countdownData = computed(() => {
           >
             <Sparkles class="w-5 h-5" />
             打開沖繩 AI 助手
+          </button>
+
+          <!-- Barcode Scanner Entry -->
+          <button 
+            @click="toolSubView = 'barcode'"
+            class="flex items-center justify-center gap-3 w-full py-4 bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform"
+          >
+            <Barcode class="w-5 h-5" />
+            商品條碼翻譯
           </button>
 
           <!-- Compact Exchange Calculator -->
@@ -3183,8 +3424,299 @@ const countdownData = computed(() => {
             </a>
           </div>
         </div>
-      </div>
-    </main>
+
+        <!-- Barcode Scanner Sub-page -->
+        <div v-if="toolSubView === 'barcode'" class="space-y-6 animate-in slide-in-from-right duration-300">
+          <div class="flex items-center justify-between">
+            <button @click="stopBarcodeScanner(); toolSubView = 'main'" class="flex items-center gap-2 text-techo-ink/60 font-bold hover:text-okinawa-blue transition-colors">
+              <ArrowLeft class="w-5 h-5" />
+              返回工具
+            </button>
+            <div class="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full flex items-center gap-1.5 ring-1 ring-emerald-100">
+              <Scan class="w-3 h-3" />
+              <span class="text-[10px] font-bold uppercase tracking-wider">Barcode Scanner</span>
+            </div>
+          </div>
+
+          <div class="bg-gradient-to-br from-emerald-500 to-teal-600 p-6 rounded-[32px] text-white shadow-xl relative overflow-hidden">
+            <div class="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+            <div class="relative z-10 flex items-center gap-4">
+              <div class="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
+                <Barcode class="w-8 h-8" />
+              </div>
+              <div>
+                <h2 class="text-xl font-bold">日本商品掃描</h2>
+                <p class="text-xs opacity-80">掃描條碼自動翻譯中文說明</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab Switcher -->
+          <div class="flex p-1 bg-techo-ink/5 rounded-2xl">
+            <button 
+              v-for="tab in [{id:'scan', label:'掃描', icon:Camera}, {id:'history', label:'歷史', icon:History}, {id:'favorites', label:'收藏', icon:Star}]"
+              :key="tab.id"
+              @click="activeBarcodeTab = tab.id"
+              :class="[
+                'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all',
+                activeBarcodeTab === tab.id ? 'bg-white text-emerald-600 shadow-sm' : 'text-techo-ink/40'
+              ]"
+            >
+              <component :is="tab.icon" class="w-4 h-4" />
+              {{ tab.label }}
+            </button>
+          </div>
+
+          <!-- Scanner View -->
+          <div v-show="isScanning && activeBarcodeTab === 'scan'" class="techo-card overflow-hidden">
+            <div id="barcode-reader" class="w-full aspect-square bg-black"></div>
+            <div class="p-6 text-center">
+              <p class="text-sm font-medium text-techo-ink/60 mb-4">請將條碼放在框內掃描</p>
+              <button 
+                @click="stopBarcodeScanner"
+                class="w-full py-4 bg-techo-ink/5 text-techo-ink font-bold rounded-2xl active:scale-95 transition-all text-sm"
+              >
+                取消掃描
+              </button>
+            </div>
+          </div>
+
+          <!-- Result View -->
+          <div v-if="!isScanning && activeBarcodeTab === 'scan'" class="space-y-6">
+            <div class="flex flex-col gap-4">
+              <button 
+                v-if="!barcodeLoading && !barcodeProductInfo" 
+                @click="startBarcodeScanner"
+                class="w-full py-8 bg-white border-2 border-dashed border-emerald-200 rounded-[32px] flex flex-col items-center gap-3 text-emerald-600 hover:bg-emerald-50 transition-all active:scale-95"
+              >
+                <div class="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
+                  <Camera class="w-6 h-6" />
+                </div>
+                <span class="font-bold">開始掃描條碼</span>
+              </button>
+
+              <!-- Manual Input Section -->
+              <div v-if="!barcodeLoading && !barcodeProductInfo" class="flex items-center gap-3 px-2">
+                <div class="h-px flex-grow bg-techo-ink/5"></div>
+                <span class="text-[10px] font-bold text-techo-ink/20 uppercase tracking-widest">或手動輸入</span>
+                <div class="h-px flex-grow bg-techo-ink/5"></div>
+              </div>
+
+              <div v-if="!barcodeLoading && !barcodeProductInfo" class="relative group">
+                <div class="absolute left-4 top-1/2 -translate-y-1/2 text-techo-ink/20 group-focus-within:text-emerald-500 transition-colors">
+                  <Search class="w-5 h-5" />
+                </div>
+                <input 
+                  v-model="manualBarcode"
+                  type="text" 
+                  inputmode="numeric"
+                  placeholder="請輸入 8 或 13 位商品條碼"
+                  class="w-full p-4 pl-12 pr-24 bg-white border border-techo-ink/10 rounded-2xl font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder:text-techo-ink/20 shadow-sm"
+                  @keyup.enter="handleManualLookup"
+                >
+                <button 
+                  @click="handleManualLookup"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg active:scale-95 transition-all"
+                >
+                  搜尋
+                </button>
+              </div>
+            </div>
+
+            <!-- Loading State -->
+            <div v-if="barcodeLoading" class="techo-card p-10 flex flex-col items-center gap-4 text-center">
+              <RefreshCw class="w-10 h-10 text-emerald-500 animate-spin" />
+              <div>
+                <p class="font-bold text-lg">正在搜尋商品資料...</p>
+                <p class="text-xs text-techo-ink/40 mt-1">串接 Open Food Facts 與 Gemini AI</p>
+              </div>
+            </div>
+
+            <!-- Error State -->
+            <div v-if="barcodeError" class="techo-card p-6 border-red-100 bg-red-50 flex items-center gap-4">
+              <AlertCircle class="w-6 h-6 text-red-500" />
+              <p class="text-sm font-bold text-red-600">{{ barcodeError }}</p>
+              <button @click="startBarcodeScanner" class="ml-auto text-xs font-bold bg-white px-3 py-1.5 rounded-lg shadow-sm">重試</button>
+            </div>
+
+            <!-- Product Card -->
+            <div v-if="barcodeProductInfo" class="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4">
+              <div class="techo-card p-6 space-y-6">
+                <!-- Header (Brand & Name) -->
+                <div class="flex items-start justify-between">
+                  <div class="space-y-1">
+                    <div class="flex items-center gap-2 mb-1">
+                      <p class="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">{{ barcodeProductInfo.brand }}</p>
+                      <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-techo-ink/5" v-if="barcodeProductInfo.type">
+                        {{ barcodeProductInfo.type === 'food' ? '🍩 食品' : '💊 藥妝/其他' }}
+                      </span>
+                    </div>
+                    <h1 class="text-2xl font-black text-techo-ink leading-tight">{{ barcodeProductInfo.name }}</h1>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button 
+                      @click="toggleFavorite(barcodeProductInfo)"
+                      class="p-2.5 rounded-xl transition-all active:scale-90"
+                      :class="isFavorite(barcodeProductInfo.barcode) ? 'bg-amber-50 text-amber-500' : 'bg-techo-ink/5 text-techo-ink/20'"
+                    >
+                      <Star class="w-5 h-5" :fill="isFavorite(barcodeProductInfo.barcode) ? 'currentColor' : 'none'" />
+                    </button>
+                    <div class="p-2 bg-emerald-50 text-emerald-600 rounded-xl flex-shrink-0">
+                      <Sparkles class="w-5 h-5" />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Description -->
+                <div class="space-y-1">
+                  <p class="text-[10px] font-bold text-techo-ink/40 uppercase tracking-widest">商品介紹</p>
+                  <p class="text-sm text-techo-ink/80 leading-relaxed font-secondary">{{ barcodeProductInfo.description }}</p>
+                </div>
+
+                <!-- Food Specific -->
+                <div v-if="barcodeProductInfo.type === 'food'" class="grid grid-cols-2 gap-4">
+                  <div class="bg-techo-ink/5 p-4 rounded-2xl">
+                    <p class="text-[10px] font-bold text-techo-ink/40 uppercase tracking-widest">熱量/營養</p>
+                    <p class="text-sm font-bold mt-1 text-techo-ink">{{ barcodeProductInfo.calories }}</p>
+                  </div>
+                  <div class="bg-techo-ink/5 p-4 rounded-2xl">
+                    <p class="text-[10px] font-bold text-techo-ink/40 uppercase tracking-widest">主要成分</p>
+                    <p class="text-sm font-bold mt-1 text-techo-ink line-clamp-3">{{ barcodeProductInfo.ingredients }}</p>
+                  </div>
+                </div>
+
+                <!-- Drug Specific -->
+                <div v-if="barcodeProductInfo.type === 'drug'" class="space-y-4">
+                  <div class="bg-okinawa-blue/5 border border-okinawa-blue/10 p-4 rounded-2xl">
+                    <p class="text-[10px] font-bold text-okinawa-blue/60 uppercase tracking-widest mb-1">核心功效</p>
+                    <p class="text-sm font-bold text-okinawa-blue">{{ barcodeProductInfo.effects }}</p>
+                  </div>
+                  
+                  <div v-if="barcodeProductInfo.steroids_antibiotics" class="flex items-center gap-3 p-4 bg-orange-50 text-orange-800 rounded-2xl border border-orange-100">
+                    <ShieldAlert class="w-5 h-5 flex-shrink-0" />
+                    <div>
+                      <p class="text-[10px] font-bold uppercase tracking-widest opacity-60">類固醇 / 抗生素</p>
+                      <p class="text-sm font-bold">{{ barcodeProductInfo.steroids_antibiotics }}</p>
+                    </div>
+                  </div>
+
+                  <div v-if="barcodeProductInfo.features?.length > 0" class="space-y-2">
+                    <p class="text-[10px] font-bold text-techo-ink/40 uppercase tracking-widest">特點</p>
+                    <div class="flex flex-wrap gap-2">
+                      <span 
+                        v-for="feature in barcodeProductInfo.features" 
+                        :key="feature"
+                        class="px-3 py-1.5 bg-techo-ink/5 text-techo-ink/70 text-xs font-bold rounded-lg"
+                      >
+                        {{ feature }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pt-6 border-t border-techo-ink/5 flex items-center justify-between">
+                  <div class="flex items-center gap-2 text-techo-ink/40">
+                    <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider">資料由 AI 解析</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button 
+                      v-if="barcodeProductInfo"
+                      @click="barcodeProductInfo = null"
+                      class="text-xs font-bold text-techo-ink/40 px-3 py-1 bg-techo-ink/5 rounded-lg active:scale-95"
+                    >
+                      關閉結果
+                    </button>
+                    <button 
+                      @click="startBarcodeScanner"
+                      class="text-xs font-bold text-okinawa-blue flex items-center gap-1 active:scale-95 transition-transform"
+                    >
+                      <RefreshCw class="w-3 h-3" />
+                      掃描下一個
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- History View -->
+            <div v-if="activeBarcodeTab === 'history'" class="space-y-4 animate-in fade-in slide-in-from-bottom-4">
+              <div class="flex items-center justify-between px-2">
+                <h3 class="font-bold text-techo-ink/60 flex items-center gap-2 text-sm">
+                  <History class="w-4 h-4" />
+                  最近掃描
+                </h3>
+                <button v-if="barcodeHistory.length > 0" @click="clearHistory" class="text-[10px] font-bold text-red-500 bg-red-50 px-2.5 py-1 rounded-lg">全部清除</button>
+              </div>
+
+              <div v-if="barcodeHistory.length === 0" class="techo-card p-12 text-center text-techo-ink/20">
+                <History class="w-12 h-12 mx-auto mb-3 opacity-20" />
+                <p class="font-bold text-sm">尚無紀錄</p>
+              </div>
+
+              <div class="space-y-3">
+                <div 
+                  v-for="item in barcodeHistory" 
+                  :key="item.barcode + '-' + item.scannedAt"
+                  @click="loadProductFromHistory(item)"
+                  class="techo-card p-4 flex items-center gap-4 active:scale-[0.98] transition-all cursor-pointer group"
+                >
+                  <div :class="['w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-lg', item.type === 'food' ? 'bg-orange-100 text-orange-600' : 'bg-emerald-100 text-emerald-600']">
+                    {{ item.type === 'food' ? '🍩' : '💊' }}
+                  </div>
+                  <div class="flex-grow min-w-0">
+                    <p class="text-[9px] font-bold text-techo-ink/40 uppercase tracking-widest leading-none mb-1">{{ item.brand }}</p>
+                    <h4 class="font-bold text-techo-ink truncate">{{ item.name }}</h4>
+                    <p class="text-[9px] font-bold text-techo-ink/20 mt-1">{{ new Date(item.scannedAt).toLocaleString('zh-TW', { month:'numeric', day:'numeric', hour:'numeric', minute:'numeric' }) }}</p>
+                  </div>
+                  <button @click.stop="toggleFavorite(item)" class="p-2 mr-1">
+                    <Star class="w-4 h-4" :class="isFavorite(item.barcode) ? 'text-amber-500' : 'text-techo-ink/10'" :fill="isFavorite(item.barcode) ? 'currentColor' : 'none'" />
+                  </button>
+                  <ChevronRight class="w-4 h-4 text-techo-ink/20 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Favorites View -->
+            <div v-if="activeBarcodeTab === 'favorites'" class="space-y-4 animate-in fade-in slide-in-from-bottom-4">
+              <div class="flex items-center justify-between px-2">
+                <h3 class="font-bold text-techo-ink/60 flex items-center gap-2 text-sm">
+                  <Star class="w-4 h-4" />
+                  收藏清單
+                </h3>
+              </div>
+
+              <div v-if="barcodeFavorites.length === 0" class="techo-card p-12 text-center text-techo-ink/20">
+                <Star class="w-12 h-12 mx-auto mb-3 opacity-20" />
+                <p class="font-bold text-sm">目前沒有收藏</p>
+                <p class="text-[10px] mt-1">掃瞄後的結果點擊星星即可收藏</p>
+              </div>
+
+              <div v-else class="space-y-3">
+                <div 
+                  v-for="item in barcodeFavorites" 
+                  :key="item.barcode + '-' + (item.favoritedAt || '')"
+                  @click="loadProductFromHistory(item)"
+                  class="techo-card p-4 flex items-center gap-4 active:scale-[0.98] transition-all cursor-pointer group border-amber-100/50"
+                >
+                  <div :class="['w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-lg', item.type === 'food' ? 'bg-orange-100 text-orange-600' : 'bg-emerald-100 text-emerald-600']">
+                    {{ item.type === 'food' ? '🍩' : '💊' }}
+                  </div>
+                  <div class="flex-grow min-w-0">
+                    <p class="text-[9px] font-bold text-techo-ink/40 uppercase tracking-widest leading-none mb-1">{{ item.brand }}</p>
+                    <h4 class="font-bold text-techo-ink truncate">{{ item.name }}</h4>
+                  </div>
+                  <button @click.stop="toggleFavorite(item)" class="p-2 mr-1">
+                    <Star class="w-4 h-4 text-amber-500" fill="currentColor" />
+                  </button>
+                  <ChevronRight class="w-4 h-4 text-techo-ink/20 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
 
     <!-- Back to Top Button -->
     <transition

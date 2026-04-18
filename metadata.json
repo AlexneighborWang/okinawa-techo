@@ -1,5 +1,5 @@
 {
   "name": "沖繩旅遊2026",
   "description": "2026 沖繩五日遊行程規劃與旅遊工具，包含行程、預訂、記帳與準備清單。",
-  "requestFramePermissions": []
+  "requestFramePermissions": ["camera"]
 }
