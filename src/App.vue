@@ -961,14 +961,10 @@ const startBarcodeScanner = async () => {
   
   try {
     barcodeScanner.value = new Html5Qrcode("barcode-reader");
-    // Optimized config for Barcodes (wider aspect ratio, higher fps)
+    // Safer config for mobile compatibility
     const config = { 
-      fps: 20, 
-      qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-        const width = viewfinderWidth * 0.8;
-        const height = viewfinderHeight * 0.4;
-        return { width, height };
-      },
+      fps: 15, 
+      qrbox: { width: 280, height: 150 },
       aspectRatio: 1.0,
       experimentalFeatures: {
         useBarCodeDetectorIfSupported: true
@@ -980,7 +976,7 @@ const startBarcodeScanner = async () => {
       config,
       (decodedText) => {
         // Success feedback
-        if (navigator.vibrate) navigator.vibrate(50);
+        if (navigator.vibrate) try { navigator.vibrate(50); } catch(e) {}
         
         stopBarcodeScanner();
         scannedResult.value = decodedText;
@@ -990,7 +986,7 @@ const startBarcodeScanner = async () => {
     );
   } catch (err) {
     console.error("Scanner failed to start", err);
-    barcodeError.value = "無法啟動相機，請檢查權限。";
+    barcodeError.value = "無法啟動相機。請確認已開啟瀏覽器相機權限，若在 LINE 或其他內建瀏覽器中開啟，請嘗試使用 Safari 或 Chrome 正式版。";
     isScanning.value = false;
   }
 };
@@ -1102,11 +1098,15 @@ const lookupProduct = async (code: string) => {
       required: ["type", "brand", "name", "description"]
     };
 
-    prompt = `條碼: ${code}
-原始資料: ${rawProductData || '無，請使用 Google 搜尋'}
+    prompt = `辨識這項日本商品的條碼: ${code}。
+原始參考內容: ${rawProductData || '無'}
 
-請判定為 food 或 drug 並翻譯為繁體中文。如果是藥妝請註明是否含類固醇/抗生素。
-輸出 JSON 格式。`;
+任務流程:
+1. 利用 Google 搜尋工具查詢該條碼對應的日本商品詳細資訊（包含品牌、品名、用途）。
+2. 判定類型為「food」或「drug」。
+3. 將所有描述、功效、成分等資訊翻譯為繁體中文。
+4. 如果是藥妝，務必分析是否含「類固醇」或「抗生素」。
+5. 最後輸出 JSON 格式。`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -3497,23 +3497,25 @@ const countdownData = computed(() => {
 
           <!-- Scanner View -->
           <div v-show="isScanning && activeBarcodeTab === 'scan'" class="techo-card overflow-hidden">
-            <div class="relative w-full aspect-square bg-black">
+            <div class="relative w-full aspect-[4/3] bg-black">
               <div id="barcode-reader" class="w-full h-full"></div>
+              <!-- Floating Cancel Button for Mobile Visibility -->
+              <button 
+                @click="stopBarcodeScanner"
+                class="absolute top-4 right-4 z-20 w-10 h-10 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white active:scale-90 transition-transform"
+              >
+                <X class="w-5 h-5" />
+              </button>
               <!-- Scan Overlay -->
               <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
-                <div class="w-[80%] h-[40%] border-2 border-emerald-500/50 rounded-lg relative overflow-hidden">
-                  <div class="absolute inset-x-0 h-0.5 bg-emerald-500 shadow-[0_0_10px_#10b981] animate-scan-line"></div>
+                <div class="w-[280px] h-[150px] border-2 border-emerald-500/80 rounded-lg relative overflow-hidden ring-[2000px] ring-black/40">
+                  <div class="absolute inset-x-0 h-0.5 bg-emerald-400 shadow-[0_0_15px_#2fe3a2] animate-scan-line"></div>
                 </div>
               </div>
             </div>
-            <div class="p-6 text-center">
-              <p class="text-sm font-medium text-techo-ink/60 mb-4">請將條碼對準框框垂直或水平掃描</p>
-              <button 
-                @click="stopBarcodeScanner"
-                class="w-full py-4 bg-techo-ink/5 text-techo-ink font-bold rounded-2xl active:scale-95 transition-all text-sm"
-              >
-                取消掃描
-              </button>
+            <div class="p-4 text-center">
+              <p class="text-[11px] font-bold text-techo-ink/40 mb-1">將條碼置於綠框正中央</p>
+              <p class="text-[10px] text-techo-ink/20">若無法掃描請尝试變換距離或改用手動輸入</p>
             </div>
           </div>
 
