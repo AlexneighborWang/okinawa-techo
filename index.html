@@ -12,9 +12,34 @@
     <link rel="icon" type="image/jpeg" href="/okinawa-techo/icon.jpg" />
     <link rel="manifest" href="/okinawa-techo/manifest.webmanifest" />
     <script>
+      // 監聽全局錯誤，防止更新導致的空白畫面
+      window.addEventListener('error', (e) => {
+        if (e.target.tagName === 'SCRIPT') {
+          console.error('偵測到資源載入失敗，準備重新整理...', e.target.src);
+          // 資源失敗，可能是因為版本更新導致舊檔案消失
+          if (!window.location.search.includes('retry=true')) {
+            window.location.search = '?retry=true';
+          }
+        }
+      }, true);
+
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/okinawa-techo/sw.js');
+          navigator.serviceWorker.register('/okinawa-techo/sw.js').then(reg => {
+            // 當發現有新版本時，自動更新
+            reg.onupdatefound = () => {
+              const installingWorker = reg.installing;
+              installingWorker.onstatechange = () => {
+                if (installingWorker.state === 'installed') {
+                  if (navigator.serviceWorker.controller) {
+                    console.log('新版本已就緒，請重新載入');
+                    // 這裡可以選擇自動重整或提醒使用者
+                    // window.location.reload(); 
+                  }
+                }
+              };
+            };
+          });
         });
       }
     </script>

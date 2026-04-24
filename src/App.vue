@@ -78,6 +78,19 @@ import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from 'firebas
 import { APP_ICON } from './assets';
 import { sendMessageToGemini } from './services/geminiService';
 
+// Helper for safe JSON parsing
+const safeJSONParse = <T>(key: string, fallback: T): T => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : fallback;
+  } catch (e) {
+    console.error(`Error parsing localStorage key ${key}:`, e);
+    // Remove the corrupted key so it doesn't keep failing
+    localStorage.removeItem(key);
+    return fallback;
+  }
+};
+
 // Views
 const currentView = ref('schedule');
 const selectedItem = ref<any>(null);
@@ -359,7 +372,7 @@ interface HotelInfo {
 
 const defaultHotels: HotelInfo[] = [];
 
-const hotels = ref<HotelInfo[]>(JSON.parse(localStorage.getItem('okinawa_hotels') || JSON.stringify(defaultHotels)));
+const hotels = ref<HotelInfo[]>(safeJSONParse('okinawa_hotels', defaultHotels));
 
 const forceSyncAllToFirebase = async (silent = false) => {
   if (!userId.value) {
@@ -448,8 +461,8 @@ const migrateAndSync = () => {
 // migrateAndSync(); // Moved to onMounted/Auth
 
 const esimMembers = ['爸', '媽', '德', '珊'];
-const esims = ref<string[]>(JSON.parse(localStorage.getItem('okinawa_esims') || '["", "", "", ""]'));
-const vsws = ref<string[]>(JSON.parse(localStorage.getItem('okinawa_vsws') || '["", "", "", ""]'));
+const esims = ref<string[]>(safeJSONParse('okinawa_esims', ["", "", "", ""]));
+const vsws = ref<string[]>(safeJSONParse('okinawa_vsws', ["", "", "", ""]));
 const selectedHotel = ref<HotelInfo | null>(null);
 
 const loopingImages = computed(() => {
@@ -533,7 +546,7 @@ watch(() => [expenseForm.amount, expenseForm.currency], () => {
   expenseForm.twdAmount = Math.round(expenseForm.amount * rate);
 });
 
-const expenses = ref<any[]>(JSON.parse(localStorage.getItem('okinawa_expenses') || '[]'));
+const expenses = ref<any[]>(safeJSONParse('okinawa_expenses', []));
 
 const saveExpense = async () => {
   if (!expenseForm.item) {
@@ -624,7 +637,7 @@ const defaultPlanning = {
   shopping: []
 };
 
-const planningData = ref(JSON.parse(localStorage.getItem('okinawa_planning') || JSON.stringify(defaultPlanning)));
+const planningData = ref(safeJSONParse('okinawa_planning', defaultPlanning));
 
 const isItemCompleted = (item: any) => {
   const itemMember = item.member || '全體';
@@ -1411,8 +1424,7 @@ const defaultScheduleItems = {
   '9/29': []
 };
 
-const savedSchedule = localStorage.getItem('okinawa_schedule');
-const allScheduleItems = reactive<Record<string, any[]>>(savedSchedule ? JSON.parse(savedSchedule) : defaultScheduleItems);
+const allScheduleItems = reactive<Record<string, any[]>>(safeJSONParse('okinawa_schedule', defaultScheduleItems));
 
 const isAuthReady = ref(false);
 const isLoggingIn = ref(false);
