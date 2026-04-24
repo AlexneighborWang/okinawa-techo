@@ -626,12 +626,35 @@ const defaultPlanning = {
 
 const planningData = ref(JSON.parse(localStorage.getItem('okinawa_planning') || JSON.stringify(defaultPlanning)));
 
+const isItemCompleted = (item: any) => {
+  const itemMember = item.member || '全體';
+  if (itemMember === '全體' && planningFilterMember.value !== '全體') {
+    const arr = Array.isArray(item.completedBy) ? item.completedBy : (item.completedBy ? [item.completedBy] : []);
+    return arr.includes(planningFilterMember.value);
+  }
+  return item.completed;
+};
+
 const planningProgress = computed(() => {
   const stats: Record<string, { percent: number, completed: number, total: number }> = {};
   ['todo', 'packing', 'shopping'].forEach(tab => {
-    const items = planningData.value[tab];
+    const rawItems = planningData.value[tab];
+    
+    // Apply same filter as filteredPlanningData
+    const items = rawItems.filter((i: any) => {
+      const m = i.member || '全體';
+      if (planningFilterMember.value === '全體') {
+        return m === '全體';
+      }
+      return m === planningFilterMember.value || m === '全體';
+    });
+
     const total = items.length;
-    const completed = items.filter((i: any) => i.completed).length;
+    // Check if user completed it (for '全體' items) or if it's completed generally
+    const completed = items.filter((i: any) => {
+      return isItemCompleted(i);
+    }).length;
+
     stats[tab] = {
       percent: total === 0 ? 0 : Math.round((completed / total) * 100),
       completed,
@@ -735,13 +758,28 @@ const togglePlanningItem = async (item: any) => {
     return;
   }
   if (editingPlanningId.value === item.id) return;
-  item.completed = !item.completed;
   
   const itemMember = item.member || '全體';
-  if (item.completed && itemMember === '全體' && planningFilterMember.value !== '全體') {
-    item.completedBy = planningFilterMember.value;
-  } else if (!item.completed) {
-    delete item.completedBy;
+  
+  if (itemMember === '全體' && planningFilterMember.value !== '全體') {
+    let completedByArray = Array.isArray(item.completedBy) ? [...item.completedBy] : (item.completedBy ? [item.completedBy] : []);
+    const user = planningFilterMember.value;
+    
+    if (completedByArray.includes(user)) {
+      completedByArray = completedByArray.filter(u => u !== user);
+    } else {
+      completedByArray.push(user);
+    }
+    
+    item.completedBy = completedByArray;
+    item.completed = completedByArray.length > 0;
+  } else {
+    item.completed = !item.completed;
+    if (!item.completed) {
+      item.completedBy = [];
+    } else if (itemMember === '全體' && planningFilterMember.value === '全體') {
+      item.completedBy = [];
+    }
   }
   
   savePlanning();
@@ -819,12 +857,13 @@ const filteredPlanningData = computed(() => {
   
   // Filter by selected member
   // If a specific member is selected, also include items belonging to '全體'
-  const filtered = planningFilterMember.value === '全體' 
-    ? data 
-    : data.filter((i: any) => {
-        const m = i.member || '全體';
-        return m === planningFilterMember.value || m === '全體';
-      });
+  const filtered = data.filter((i: any) => {
+    const m = i.member || '全體';
+    if (planningFilterMember.value === '全體') {
+      return m === '全體';
+    }
+    return m === planningFilterMember.value || m === '全體';
+  });
 
   const groups: Record<string, any[]> = {};
   
@@ -944,10 +983,38 @@ const speak = (text: string) => {
   // Cancel current speech to prevent queuing
   window.speechSynthesis.cancel();
   
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'ja-JP';
-  utterance.rate = 0.9;
-  window.speechSynthesis.speak(utterance);
+  const playVoice = () => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ja-JP';
+    utterance.rate = 0.9;
+    
+    // Explicitly find and set a Japanese voice
+    const voices = window.speechSynthesis.getVoices();
+    const jaVoice = voices.find(v => v.lang === 'ja-JP' || v.lang === 'ja_JP');
+    if (jaVoice) {
+      utterance.voice = jaVoice;
+    }
+    
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // iOS Chrome/Safari issue: getVoices() is often empty initially because it loads asynchronously.
+  if (window.speechSynthesis.getVoices().length === 0) {
+    window.speechSynthesis.addEventListener('voiceschanged', () => {
+      playVoice();
+    }, { once: true });
+    // Trigger voice loading
+    window.speechSynthesis.getVoices();
+    
+    // Fallback: if voices still don't change within 500ms, try playing anyway 
+    setTimeout(() => {
+      if (!window.speechSynthesis.speaking) {
+        playVoice();
+      }
+    }, 500);
+  } else {
+    playVoice();
+  }
 };
 
 const travelPhraseCategories = [
@@ -1464,6 +1531,8 @@ onMounted(async () => {
   });
 });
 
+const reloadPage = () => window.location.reload();
+
 const loginWithGoogle = async () => {
   if (isLoggingIn.value) return;
   
@@ -1787,7 +1856,7 @@ const countdownData = computed(() => {
         <!-- PWA Reload Helper -->
         <button 
           v-if="isLoggingIn" 
-          @click="() => window.location.reload()"
+          @click="reloadPage"
           class="mt-6 text-sm text-techo-ink/50 underline hover:text-okinawa-blue transition-colors font-medium active:bg-transparent"
         >
           已完成授權但畫面卡住？點此重新載入
@@ -2840,7 +2909,7 @@ const countdownData = computed(() => {
                 @mouseleave="isDragging ? handleDragEnd(item.id, 'planning') : null"
               >
                 <div class="text-okinawa-blue">
-                  <CheckCircle2 v-if="item.completed" class="w-6 h-6" />
+                  <CheckCircle2 v-if="isItemCompleted(item)" class="w-6 h-6" />
                   <Circle v-else class="w-6 h-6 text-techo-ink/20" />
                 </div>
                 <div class="flex-grow">
@@ -2853,10 +2922,10 @@ const countdownData = computed(() => {
                     class="w-full bg-techo-ink/5 p-1 rounded font-medium focus:outline-none"
                     autoFocus
                   >
-                  <p v-else :class="['font-medium transition-all', item.completed ? 'line-through text-techo-ink/30' : 'text-techo-ink']">
+                  <p v-else :class="['font-medium transition-all', isItemCompleted(item) ? 'line-through text-techo-ink/30' : 'text-techo-ink']">
                     {{ item.text }}
-                    <span v-if="item.completed && item.completedBy" class="ml-2 text-[10px] font-bold bg-okinawa-blue/10 text-okinawa-blue px-1.5 py-0.5 rounded-md no-underline inline-block">
-                      {{ item.completedBy }}
+                    <span v-if="(Array.isArray(item.completedBy) ? item.completedBy.length > 0 : item.completedBy)" class="ml-2 text-[10px] font-bold bg-okinawa-blue/10 text-okinawa-blue px-1.5 py-0.5 rounded-md no-underline inline-block">
+                      {{ Array.isArray(item.completedBy) ? item.completedBy.join(', ') : item.completedBy }}
                     </span>
                   </p>
                 </div>
@@ -3627,8 +3696,8 @@ const countdownData = computed(() => {
     </div>
 
     <!-- Declaration Modal -->
-    <div v-if="showDeclarationModal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-okinawa-blue/20 backdrop-blur-md">
-      <div class="bg-white w-full max-w-md rounded-[40px] p-8 shadow-2xl border border-okinawa-blue/10 animate-in zoom-in duration-300">
+    <div v-if="showDeclarationModal" class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-okinawa-blue/20 backdrop-blur-md">
+      <div class="bg-white w-full max-w-md rounded-t-[40px] sm:rounded-[40px] p-8 pb-10 sm:pb-8 shadow-2xl border border-okinawa-blue/10 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in duration-300 max-h-[90vh] overflow-y-auto">
         <div class="text-center mb-6">
           <div class="w-16 h-16 bg-okinawa-blue/10 text-okinawa-blue rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle2 class="w-8 h-8" />

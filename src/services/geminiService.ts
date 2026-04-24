@@ -28,8 +28,8 @@ export const sendMessageToGemini = async (prompt: string, imageBase64?: string) 
     });
 
     return response.text || "抱歉，我暫時無法回答這個問題。";
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
-    return "連線 AI 服務時發生錯誤，請稍後再試。";
+    return `連線 AI 服務時發生錯誤，請稍後再試。(${error?.message || '未知錯誤'})`;
   }
 };
