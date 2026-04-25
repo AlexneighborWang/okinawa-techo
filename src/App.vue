@@ -1003,9 +1003,23 @@ const speak = (text: string) => {
     
     // Explicitly find and set a Japanese voice
     const voices = window.speechSynthesis.getVoices();
-    const jaVoice = voices.find(v => v.lang === 'ja-JP' || v.lang === 'ja_JP');
-    if (jaVoice) {
-      utterance.voice = jaVoice;
+    const jaVoices = voices.filter(v => v.lang === 'ja-JP' || v.lang === 'ja_JP' || v.lang === 'ja');
+    
+    if (jaVoices.length > 0) {
+      // 嘗試尋找特定的女性聲音 (Kyoko 是 iOS 預設女聲), 或者避開預設男聲 (Otoya)
+      let selectedVoice = jaVoices.find(v => v.name.includes('Kyoko') || v.name.includes('Hattori') || v.name.includes('O-ren') || v.name.includes('Siri') && v.name.includes('Female'));
+      
+      // 再退一步找常見的 Google 女聲
+      if (!selectedVoice) {
+        selectedVoice = jaVoices.find(v => v.name.includes('Google'));
+      }
+      
+      if (!selectedVoice) {
+        // 如果都沒有，盡量不選 Otoya (男聲)
+        selectedVoice = jaVoices.find(v => !v.name.includes('Otoya') && !v.name.includes('Keita')) || jaVoices[0];
+      }
+      
+      utterance.voice = selectedVoice;
     }
     
     window.speechSynthesis.speak(utterance);
