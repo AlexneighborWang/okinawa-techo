@@ -2167,6 +2167,7 @@ const countdownData = computed(() => {
               <div>
                 <p class="text-3xl font-bold">TPE</p>
                 <p class="text-xs opacity-80">Taipei</p>
+                <p class="text-xl font-bold mt-2">18:30</p>
               </div>
               <div class="flex-grow flex flex-col items-center px-4">
                 <div class="w-full border-t border-dashed border-white/40 relative">
@@ -2177,6 +2178,7 @@ const countdownData = computed(() => {
               <div class="text-right">
                 <p class="text-3xl font-bold">OKA</p>
                 <p class="text-xs opacity-80">Okinawa</p>
+                <p class="text-xl font-bold mt-2">20:50</p>
               </div>
             </div>
             <div class="mt-6 pt-6 border-t border-white/20 flex justify-between text-sm">
@@ -2215,6 +2217,7 @@ const countdownData = computed(() => {
               <div>
                 <p class="text-3xl font-bold">OKA</p>
                 <p class="text-xs opacity-80">Okinawa</p>
+                <p class="text-xl font-bold mt-2">16:55</p>
               </div>
               <div class="flex-grow flex flex-col items-center px-4">
                 <div class="w-full border-t border-dashed border-white/40 relative">
@@ -2225,6 +2228,7 @@ const countdownData = computed(() => {
               <div class="text-right">
                 <p class="text-3xl font-bold">TPE</p>
                 <p class="text-xs opacity-80">Taipei</p>
+                <p class="text-xl font-bold mt-2">17:30</p>
               </div>
             </div>
             <div class="mt-6 pt-6 border-t border-white/20 flex justify-between text-sm">
