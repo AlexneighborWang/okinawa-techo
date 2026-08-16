@@ -63,6 +63,7 @@ import {
 } from 'lucide-vue-next';
 import { GoogleGenAI, Type } from "@google/genai";
 import { db, auth } from './firebase';
+import panzoom from 'panzoom';
 import { 
   collection, 
   onSnapshot, 
@@ -258,6 +259,12 @@ const handleZoomScroll = (e: Event) => {
   zoomedImageIndex.value = (Math.round(target.scrollLeft / width) - 1 + total) % total;
 };
 
+watch(zoomedImageIndex, (newVal) => {
+  if (newVal !== null) {
+    initPanzoom(newVal);
+  }
+});
+
 const nextHotelImage = () => {
   if (!selectedHotel.value) return;
   const total = selectedHotel.value.images.length;
@@ -280,6 +287,38 @@ const prevHotelImage = () => {
     const currentScroll = hotelDetailsSliderRef.value.scrollLeft;
     hotelDetailsSliderRef.value.scrollTo({ left: currentScroll - width, behavior: 'smooth' });
   }
+};
+
+let pzInstance: any = null;
+
+const closeZoom = () => {
+  if (pzInstance) {
+    pzInstance.dispose();
+    pzInstance = null;
+  }
+  zoomedImageIndex.value = null;
+  zoomedPlanningItem.value = null;
+  if (selectedHotel.value?.id === 'temp') {
+    selectedHotel.value = null;
+  }
+};
+
+const initPanzoom = (index: number) => {
+  if (pzInstance) {
+    pzInstance.dispose();
+    pzInstance = null;
+  }
+  nextTick(() => {
+    const imgEl = document.getElementById(`zoom-img-${index}`);
+    if (imgEl) {
+      pzInstance = panzoom(imgEl, {
+        maxZoom: 5,
+        minZoom: 1,
+        bounds: true,
+        boundsPadding: 0.1
+      });
+    }
+  });
 };
 
 const openZoom = (index: number) => {
@@ -3554,7 +3593,7 @@ const countdownData = computed(() => {
           </button>
 
           <button 
-            @click="zoomedImageIndex = null; zoomedPlanningItem = null; if(selectedHotel?.id === 'temp') selectedHotel = null" 
+            @click="closeZoom" 
             class="p-3 bg-white/10 text-white rounded-full hover:bg-white/20 transition-colors backdrop-blur-md"
           >
             <X class="w-8 h-8" />
@@ -3581,12 +3620,14 @@ const countdownData = computed(() => {
           <ChevronRight class="w-6 h-6" />
         </button>
 
-        <div v-for="(img, idx) in loopingImages" :key="idx" class="min-w-full h-full flex items-center justify-center snap-center p-4" @click="zoomedImageIndex = null">
+        <div v-for="(img, idx) in loopingImages" :key="idx" class="min-w-full h-full flex items-center justify-center snap-center p-4" @click="closeZoom">
           <img 
+            :id="`zoom-img-${idx}`"
             :src="img" 
             class="max-w-full max-h-full object-contain rounded-lg shadow-2xl" 
             referrerPolicy="no-referrer" 
             crossorigin="anonymous"
+            @click.stop
           />
         </div>
       </div>
@@ -3602,7 +3643,7 @@ const countdownData = computed(() => {
     </div>
 
     <!-- Hotel Details Modal -->
-    <div v-if="selectedHotel" class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+    <div v-if="selectedHotel && selectedHotel.id !== 'temp'" class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div class="bg-white w-full max-w-lg max-h-[90vh] rounded-[32px] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in duration-300">
         <!-- Header with Slider -->
         <div class="relative h-72 flex-shrink-0 group">
