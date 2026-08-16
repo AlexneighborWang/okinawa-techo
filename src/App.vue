@@ -292,6 +292,26 @@ const openZoom = (index: number) => {
   });
 };
 
+const openZoomForVoucher = (type: 'esim' | 'vsw', index: number) => {
+  const sourceArray = type === 'esim' ? esims.value : vsws.value;
+  const namePrefix = type === 'esim' ? 'eSIM QR 碼' : 'VSW QR 碼';
+  
+  selectedHotel.value = {
+    id: 'temp',
+    images: [sourceArray[index]],
+    name: `${namePrefix} - ${esimMembers[index]}`
+  } as any;
+  zoomedImageIndex.value = 0;
+  zoomedPlanningItem.value = null;
+  
+  nextTick(() => {
+    if (zoomedSliderRef.value) {
+      const width = zoomedSliderRef.value.clientWidth;
+      zoomedSliderRef.value.scrollTo({ left: width, behavior: 'auto' });
+    }
+  });
+};
+
 const nextImage = () => {
   if (!selectedHotel.value || zoomedImageIndex.value === null) return;
   if (zoomedSliderRef.value) {
@@ -461,8 +481,17 @@ const migrateAndSync = () => {
 // migrateAndSync(); // Moved to onMounted/Auth
 
 const esimMembers = ['爸', '媽', '德', '珊'];
-const esims = ref<string[]>(safeJSONParse('okinawa_esims', ["", "", "", ""]));
-const vsws = ref<string[]>(safeJSONParse('okinawa_vsws', ["", "", "", ""]));
+
+const getInitialArray = (key: string) => {
+  const parsed = safeJSONParse(key, ["", "", "", ""]);
+  // Ensure array always has exactly 4 items
+  const result = Array.isArray(parsed) ? [...parsed] : [];
+  while (result.length < 4) result.push("");
+  return result.slice(0, 4);
+};
+
+const esims = ref<string[]>(getInitialArray('okinawa_esims'));
+const vsws = ref<string[]>(getInitialArray('okinawa_vsws'));
 const selectedHotel = ref<HotelInfo | null>(null);
 
 const loopingImages = computed(() => {
@@ -1210,7 +1239,7 @@ const triggerVswUpload = (index: number) => {
 };
 
 const compressImage = (base64Str: string, maxWidth = 600): Promise<string> => {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const img = new Image();
     img.src = base64Str;
     img.onload = () => {
@@ -1228,6 +1257,9 @@ const compressImage = (base64Str: string, maxWidth = 600): Promise<string> => {
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0, width, height);
       resolve(canvas.toDataURL('image/jpeg', 0.4)); // 降低品質至 0.4 以確保檔案更小
+    };
+    img.onerror = () => {
+      reject(new Error("Image failed to load (possible unsupported format like HEIC)."));
     };
   });
 };
@@ -1624,7 +1656,11 @@ const setupRealtimeListeners = () => {
     if (snapshot.exists()) {
       const data = snapshot.data();
       updateSyncCache('vouchers', 'esims', data);
-      if (data.images) esims.value = data.images;
+      if (data.images) {
+        const imgs = Array.isArray(data.images) ? [...data.images] : [];
+        while (imgs.length < 4) imgs.push("");
+        esims.value = imgs.slice(0, 4);
+      }
     }
   });
   unsubscribes.push(vouchersUnsub);
@@ -1633,7 +1669,11 @@ const setupRealtimeListeners = () => {
     if (snapshot.exists()) {
       const data = snapshot.data();
       updateSyncCache('vouchers', 'vsws', data);
-      if (data.images) vsws.value = data.images;
+      if (data.images) {
+        const imgs = Array.isArray(data.images) ? [...data.images] : [];
+        while (imgs.length < 4) imgs.push("");
+        vsws.value = imgs.slice(0, 4);
+      }
     }
   });
   unsubscribes.push(vswsUnsub);
@@ -2437,7 +2477,7 @@ const countdownData = computed(() => {
                 </div>
                 
                 <template v-else>
-                  <img :src="esim" class="w-full h-full object-contain p-2" />
+                  <img :src="esim" class="w-full h-full object-contain p-2 cursor-pointer" @click="openZoomForVoucher('esim', idx)" />
                   <!-- Delete Button (Always visible for better mobile access) -->
                   <button 
                     @click="removeEsim(idx)" 
@@ -2489,7 +2529,7 @@ const countdownData = computed(() => {
                 </div>
                 
                 <template v-else>
-                  <img :src="vsw" class="w-full h-full object-contain p-2" />
+                  <img :src="vsw" class="w-full h-full object-contain p-2 cursor-pointer" @click="openZoomForVoucher('vsw', idx)" />
                   <!-- Delete Button -->
                   <button 
                     @click="removeVsw(idx)" 
